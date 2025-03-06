@@ -1,13 +1,28 @@
 "use client"
 
-import { useState, useRef, useEffect } from "react"
-import { SunIcon } from "lucide-react"
+import { useState, useRef, useEffect, useCallback } from "react"
+import { 
+  SunIcon, 
+  Bold, 
+  Italic, 
+  List, 
+  Type, 
+  ChevronDown, 
+  FilePlus, 
+  FileDown, 
+  Printer, 
+  X 
+} from "lucide-react"
 import Image from "next/image"
 import PhotoGrid from "@/components/photo-grid"
 import { useToast } from "@/components/ui/use-toast"
 import type { ReportSection } from "@/types/document"
-import { Editor, EditorState, RichUtils, ContentState, convertFromHTML } from 'draft-js'
-import 'draft-js/dist/Draft.css'
+import { exportToPDF } from "@/lib/utils"
+import InlineEditor from "@/components/inline-editor"
+import PaginatedReport from "@/components/paginated-report"
+import PDFDropZone from "@/components/pdf-drop-zone"
+import { Button } from "@/components/ui/button"
+import { useVirtualizer } from "@tanstack/react-virtual"
 
 // Hardcoded sections starting from 4.0
 const SECTIONS: ReportSection[] = [
@@ -81,6 +96,16 @@ const SECTIONS: ReportSection[] = [
   },
 ]
 
+// Standard US Letter size in inches
+const LETTER_WIDTH_IN = 8.5
+const LETTER_HEIGHT_IN = 11
+
+// Convert to pixels (assuming 96 DPI for web)
+const DPI = 96
+const PAGE_WIDTH_PX = LETTER_WIDTH_IN * DPI
+const PAGE_HEIGHT_PX = LETTER_HEIGHT_IN * DPI
+const MARGIN_PX = 1 * DPI // 1 inch margins
+
 export default function UnifiedReportEditor() {
   // Photo grid state
   const [selectedPhotos, setSelectedPhotos] = useState<string[]>([])
@@ -88,18 +113,22 @@ export default function UnifiedReportEditor() {
   const [isGenerating, setIsGenerating] = useState(false)
   
   // Technical report state
-  const [currentPage, setCurrentPage] = useState(1)
-  const [totalPages, setTotalPages] = useState(1)
+  const [sections, setSections] = useState<ReportSection[]>(SECTIONS)
+  const [editingSection, setEditingSection] = useState<string | null>(null)
+  const [editingSubsection, setEditingSubsection] = useState<string | null>(null)
   
-  // Rich text editor state
-  const [editorState, setEditorState] = useState(() => 
-    EditorState.createEmpty()
-  )
-  const [showTechnicalReport, setShowTechnicalReport] = useState(true)
+  // PDF state
+  const [isPdfDropActive, setIsPdfDropActive] = useState(false)
+  const [pdfPages, setPdfPages] = useState<string[]>([])
+  
+  // Virtualization state
+  const [totalPages, setTotalPages] = useState(1)
+  const [currentPage, setCurrentPage] = useState(1)
   
   // Refs
   const contentRef = useRef<HTMLDivElement>(null)
-  const editorRef = useRef<Editor>(null)
+  const reportContainerRef = useRef<HTMLDivElement>(null)
+  const reportPagesRef = useRef<HTMLDivElement>(null)
   
   // Toast
   const { toast } = useToast()
@@ -112,21 +141,175 @@ export default function UnifiedReportEditor() {
   }
 
   // Report metadata
-  const projectNumber = "RZ1324-0XXX-00"
-  const issueDate = "June 1, 2020"
-  const companyName = "Halton Condominium Corporation No. XX"
-  const documentTitle = "Class 1/2/3 Comprehensive/Updated Reserve Fund Study"
+  const metadata = {
+    projectNumber: "RZ1324-0XXX-00",
+    issueDate: "June 1, 2020",
+    companyName: "Halton Condominium Corporation No. XX",
+    documentTitle: "Class 1/2/3 Comprehensive/Updated Reserve Fund Study"
+  }
 
-  // Calculate total pages based on content height
+  // Calculate number of pages based on content height
   useEffect(() => {
-    if (contentRef.current) {
+    const calculatePages = () => {
+      if (!contentRef.current) return
+      
       const contentHeight = contentRef.current.scrollHeight
-      const pageHeight = 1056 // A4 height in pixels at 96 DPI
-      setTotalPages(Math.ceil(contentHeight / pageHeight))
+      const contentPerPage = PAGE_HEIGHT_PX - (2 * MARGIN_PX) - 120 // 120px for header/footer
+      const pageCount = Math.ceil(contentHeight / contentPerPage) + (pdfPages.length > 0 ? Math.ceil(pdfPages.length / 2) : 0)
+      
+      setTotalPages(Math.max(1, pageCount))
+    }
+    
+    calculatePages()
+    
+    // Recalculate when window resizes or when sections change
+    window.addEventListener('resize', calculatePages)
+    
+    return () => {
+      window.removeEventListener('resize', calculatePages)
+    }
+  }, [sections, pdfPages])
+  
+  // Track current page based on scroll position
+  useEffect(() => {
+    const handleScroll = () => {
+      if (!reportContainerRef.current) return
+      
+      const { scrollTop } = reportContainerRef.current
+      const pageHeight = PAGE_HEIGHT_PX + 40 // Adding some margin between pages
+      const currentPageCalc = Math.floor(scrollTop / pageHeight) + 1
+      
+      setCurrentPage(currentPageCalc)
+    }
+    
+    const container = reportContainerRef.current
+    if (container) {
+      container.addEventListener('scroll', handleScroll)
+    }
+    
+    return () => {
+      if (container) {
+        container.removeEventListener('scroll', handleScroll)
+      }
     }
   }, [])
 
-  // Handle text generation
+  // Generate virtual pages for performance
+  const rowVirtualizer = useVirtualizer({
+    count: totalPages,
+    getScrollElement: () => reportContainerRef.current,
+    estimateSize: () => PAGE_HEIGHT_PX + 40, // Page height + margin
+    overscan: 2,
+  })
+
+  // Start editing a section or subsection
+  const startEditing = (sectionId: string, subsectionId?: string) => {
+    setEditingSection(sectionId)
+    setEditingSubsection(subsectionId || null)
+  }
+
+  // Save edited content
+  const saveEditedContent = (html: string) => {
+    if (!editingSection) return
+    
+    // Update the sections state
+    setSections(prevSections => {
+      return prevSections.map(section => {
+        if (section.id === editingSection) {
+          if (editingSubsection) {
+            // Update subsection content
+            return {
+              ...section,
+              subsections: section.subsections?.map(subsection => 
+                subsection.id === editingSubsection 
+                  ? { ...subsection, content: html }
+                  : subsection
+              )
+            }
+          } else {
+            // Update section content
+            return { ...section, content: html }
+          }
+        }
+        return section
+      })
+    })
+    
+    // Reset editing state
+    setEditingSection(null)
+    setEditingSubsection(null)
+  }
+
+  // Cancel editing
+  const cancelEditing = () => {
+    setEditingSection(null)
+    setEditingSubsection(null)
+  }
+
+  // Get content for current editing
+  const getEditingContent = useCallback(() => {
+    if (!editingSection) return ""
+    
+    if (editingSubsection) {
+      const section = sections.find(s => s.id === editingSection)
+      const subsection = section?.subsections?.find(ss => ss.id === editingSubsection)
+      return subsection?.content || ""
+    } else {
+      const section = sections.find(s => s.id === editingSection)
+      return section?.content || ""
+    }
+  }, [editingSection, editingSubsection, sections])
+
+  // Export report to PDF
+  const handleExportPDF = async () => {
+    if (!reportPagesRef.current) return
+    
+    try {
+      toast({
+        title: "Exporting PDF",
+        description: "Please wait while we generate your PDF..."
+      })
+      
+      const result = await exportToPDF(reportPagesRef.current, `Report-${metadata.projectNumber}.pdf`)
+      
+      if (result) {
+        toast({
+          title: "PDF Exported",
+          description: "Your report has been exported as a PDF successfully."
+        })
+      }
+    } catch (error) {
+      console.error("PDF export error:", error)
+      toast({
+        title: "Export Failed",
+        description: "There was an error exporting your report to PDF.",
+        variant: "destructive"
+      })
+    }
+  }
+  
+  // Handle PDF import
+  const handlePdfImport = (pdfImages: string[], pageCount: number) => {
+    setPdfPages([...pdfPages, ...pdfImages])
+    setIsPdfDropActive(false)
+    
+    toast({
+      title: "PDF Imported",
+      description: `${pageCount} pages imported successfully.`
+    })
+  }
+  
+  // Toggle PDF drop zone
+  const togglePdfDropZone = () => {
+    setIsPdfDropActive(!isPdfDropActive)
+  }
+  
+  // Remove a PDF page
+  const removePdfPage = (index: number) => {
+    setPdfPages(pdfPages.filter((_, i) => i !== index))
+  }
+
+  // Handle AI text generation
   const handleGenerateText = async (selectedText = "") => {
     try {
       setIsGenerating(true)
@@ -146,39 +329,35 @@ export default function UnifiedReportEditor() {
     }
   }
 
-  // Rich text editor key commands
-  const handleKeyCommand = (command: string, editorState: EditorState) => {
-    const newState = RichUtils.handleKeyCommand(editorState, command)
-    if (newState) {
-      setEditorState(newState)
-      return 'handled'
-    }
-    return 'not-handled'
-  }
-
-  // Toggle between rich text editor and technical report
-  const toggleEditorView = () => {
-    setShowTechnicalReport(!showTechnicalReport)
-  }
-
-  // Rich text editor toolbar actions
-  const toggleInlineStyle = (style: string) => {
-    setEditorState(RichUtils.toggleInlineStyle(editorState, style))
-  }
-
-  const toggleBlockType = (blockType: string) => {
-    setEditorState(RichUtils.toggleBlockType(editorState, blockType))
-  }
-
   return (
     <div className="flex h-screen">
       {/* Left panel - Photo grid */}
       <div className="w-1/3 border-r border-gray-200 overflow-y-auto p-4 bg-gray-50">
         <div className="flex justify-between items-center mb-4">
           <h1 className="text-xl font-bold text-gray-900">Photos</h1>
-          <button className="p-2 rounded-full hover:bg-gray-200">
-            <SunIcon className="h-5 w-5 text-gray-600" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button 
+              className="p-2 rounded-full hover:bg-gray-200" 
+              title="Import PDF"
+              onClick={togglePdfDropZone}
+            >
+              <FilePlus className="h-5 w-5 text-gray-600" />
+            </button>
+            <button 
+              className="p-2 rounded-full hover:bg-gray-200"
+              title="Export to PDF"
+              onClick={handleExportPDF}
+            >
+              <FileDown className="h-5 w-5 text-gray-600" />
+            </button>
+            <button 
+              className="p-2 rounded-full hover:bg-gray-200"
+              title="Print"
+              onClick={() => window.print()}
+            >
+              <Printer className="h-5 w-5 text-gray-600" />
+            </button>
+          </div>
         </div>
 
         <div className="mb-4">
@@ -191,178 +370,246 @@ export default function UnifiedReportEditor() {
           />
         </div>
 
-        <PhotoGrid
-          filterQuery={filterQuery}
-          selectedPhotos={selectedPhotos}
-          onSelectPhoto={(id) => {
-            if (selectedPhotos.includes(id)) {
-              setSelectedPhotos(selectedPhotos.filter((photoId) => photoId !== id))
-            } else {
-              setSelectedPhotos([...selectedPhotos, id])
-            }
-          }}
-        />
+        {isPdfDropActive ? (
+          <PDFDropZone 
+            onImport={handlePdfImport}
+            isActive={true}
+          />
+        ) : (
+          <PhotoGrid
+            filterQuery={filterQuery}
+            selectedPhotos={selectedPhotos}
+            onSelectPhoto={(id) => {
+              if (selectedPhotos.includes(id)) {
+                setSelectedPhotos(selectedPhotos.filter((photoId) => photoId !== id))
+              } else {
+                setSelectedPhotos([...selectedPhotos, id])
+              }
+            }}
+          />
+        )}
       </div>
 
-      {/* Right panel - Editor/Report Toggle */}
-      <div className="w-2/3 flex flex-col bg-white overflow-y-auto">
-        {/* Editor Controls */}
-        <div className="border-b border-gray-200 p-2 flex items-center justify-between">
-          <div className="flex space-x-2">
-            <button 
-              onClick={() => toggleInlineStyle('BOLD')}
-              className="p-1 rounded hover:bg-gray-100"
-            >
-              <span className="font-bold">B</span>
-            </button>
-            <button 
-              onClick={() => toggleInlineStyle('ITALIC')}
-              className="p-1 rounded hover:bg-gray-100"
-            >
-              <span className="italic">I</span>
-            </button>
-            <button 
-              onClick={() => toggleInlineStyle('UNDERLINE')}
-              className="p-1 rounded hover:bg-gray-100"
-            >
-              <span className="underline">U</span>
-            </button>
-            <button 
-              onClick={() => toggleBlockType('header-one')}
-              className="p-1 rounded hover:bg-gray-100"
-            >
-              H1
-            </button>
-            <button 
-              onClick={() => toggleBlockType('header-two')}
-              className="p-1 rounded hover:bg-gray-100"
-            >
-              H2
-            </button>
-            <button 
-              onClick={() => toggleBlockType('unordered-list-item')}
-              className="p-1 rounded hover:bg-gray-100"
-            >
-              • List
-            </button>
+      {/* Right panel - Technical Report with Pagination */}
+      <div className="w-2/3 flex flex-col bg-white overflow-hidden">
+        {/* Report toolbar */}
+        <div className="border-b border-gray-200 p-2 flex items-center justify-between bg-gray-50">
+          <div className="text-sm">
+            Page {currentPage} of {totalPages}
           </div>
-          <button 
-            onClick={toggleEditorView}
-            className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600"
-          >
-            {showTechnicalReport ? "Switch to Rich Text" : "Switch to Technical Report"}
-          </button>
+          <div className="flex items-center space-x-2">
+            <Button 
+              size="sm" 
+              variant="outline"
+              onClick={togglePdfDropZone}
+            >
+              <FilePlus className="h-4 w-4 mr-1" />
+              Import PDF
+            </Button>
+            <Button 
+              size="sm"
+              onClick={handleExportPDF}
+            >
+              <FileDown className="h-4 w-4 mr-1" />
+              Export PDF
+            </Button>
+          </div>
         </div>
-
-        {/* Content Area */}
-        {showTechnicalReport ? (
-          // Technical Report View
-          <div className="min-h-full bg-white">
-            <div className="max-w-[8.5in] mx-auto">
-              {/* Page content */}
+        
+        {/* Technical Report with virtualized pages */}
+        <div 
+          ref={reportContainerRef}
+          className="flex-1 overflow-y-auto"
+          style={{
+            width: '100%',
+            height: '100%',
+            background: '#f0f0f0',
+          }}
+        >
+          <div
+            ref={reportPagesRef}
+            style={{
+              height: `${rowVirtualizer.getTotalSize()}px`,
+              width: '100%',
+              position: 'relative',
+            }}
+          >
+            {rowVirtualizer.getVirtualItems().map((virtualRow) => (
               <div
-                ref={contentRef}
-                className="p-[1in] min-h-[11in] relative"
+                key={virtualRow.index}
+                className="report-page"
                 style={{
-                  fontFamily: "Arial, sans-serif",
-                  fontSize: "11pt",
-                  lineHeight: "1.5",
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  height: `${virtualRow.size}px`,
+                  transform: `translateY(${virtualRow.start}px)`,
+                  padding: '20px 0',
+                  display: 'flex',
+                  justifyContent: 'center',
                 }}
               >
-                {/* Header */}
-                <div className="flex justify-between items-start mb-8">
-                  <div>
-                    <div className="text-red-600 font-bold mb-1">{companyName}</div>
-                    <div className="text-black">{documentTitle}</div>
-                  </div>
-                  <Image
-                    src={logo?.url || "/placeholder.svg"}
-                    alt="Cion Logo"
-                    width={logo?.width || 100}
-                    height={logo?.height || 100}
-                    className="object-contain"
-                    priority
-                  />
-                </div>
-
-                {/* Main content */}
-                <div className="space-y-6">
-                  {SECTIONS.map((section) => (
-                    <div key={section.id} className="space-y-4">
-                      {/* Main section header */}
-                      <div className="flex items-baseline space-x-2">
-                        <span className="text-xl font-bold">{section.number}</span>
-                        <span className="text-xl font-bold">|</span>
-                        <span className="text-xl font-bold text-red-600">{section.title}</span>
+                <div 
+                  className="bg-white shadow-lg"
+                  style={{
+                    width: `${PAGE_WIDTH_PX}px`,
+                    height: `${PAGE_HEIGHT_PX}px`,
+                    position: 'relative',
+                    overflow: 'hidden',
+                  }}
+                >
+                  {/* Page content with header and footer */}
+                  <div className="relative h-full">
+                    {/* Header */}
+                    <div 
+                      className="absolute top-0 left-0 right-0 px-[1in] pt-[1in] pb-4 flex justify-between items-start"
+                      style={{ borderBottom: virtualRow.index === 0 ? 'none' : '1px solid #e5e7eb' }}
+                    >
+                      <div>
+                        <div className="text-red-600 font-bold mb-1">{metadata.companyName}</div>
+                        <div className="text-black">{metadata.documentTitle}</div>
                       </div>
-
-                      {/* Main section content */}
-                      <div className="whitespace-pre-line pl-4">{section.content}</div>
-
-                      {/* Subsections */}
-                      {section.subsections?.map((subsection) => (
-                        <div key={subsection.id} className="space-y-2 mt-8">
-                          <div className="flex items-baseline space-x-4">
-                            <span className="font-bold text-center w-16">{subsection.number}</span>
-                            <span className="font-bold">{subsection.title}</span>
-                          </div>
-                          <div className="whitespace-pre-line pl-20">{subsection.content}</div>
-                        </div>
-                      ))}
+                      <Image
+                        src={logo?.url || "/placeholder.svg"}
+                        alt="Logo"
+                        width={logo?.width || 100}
+                        height={logo?.height || 40}
+                        className="object-contain"
+                        priority
+                      />
                     </div>
-                  ))}
-                </div>
+                    
+                    {/* Page content area */}
+                    <div 
+                      ref={virtualRow.index === 0 ? contentRef : undefined}
+                      className="px-[1in] pt-[2in] pb-[1.5in]"
+                      style={{
+                        height: '100%',
+                        overflowY: 'hidden',
+                        fontFamily: "Arial, sans-serif",
+                        fontSize: "11pt",
+                        lineHeight: "1.5",
+                      }}
+                    >
+                      {/* Display report content on first virtual page */}
+                      {virtualRow.index === 0 && (
+                        <div className="space-y-6">
+                          {sections.map((section) => (
+                            <div key={section.id} className="space-y-4">
+                              {/* Main section header */}
+                              <div className="flex items-baseline space-x-2">
+                                <span className="text-xl font-bold">{section.number}</span>
+                                <span className="text-xl font-bold">|</span>
+                                <span className="text-xl font-bold text-red-600">{section.title}</span>
+                              </div>
 
-                {/* Footer */}
-                <div className="absolute bottom-[1in] left-[1in] right-[1in] flex justify-between text-sm">
-                  <div>
-                    <div>Project Number: {projectNumber}</div>
-                    <div>Issued: {issueDate}</div>
+                              {/* Main section content - inline editing */}
+                              {editingSection === section.id && !editingSubsection ? (
+                                <InlineEditor
+                                  initialContent={section.content}
+                                  onSave={saveEditedContent}
+                                  onCancel={cancelEditing}
+                                />
+                              ) : (
+                                <div 
+                                  className="pl-4 hover:bg-gray-50 cursor-pointer"
+                                  onClick={() => startEditing(section.id)}
+                                  dangerouslySetInnerHTML={{ __html: section.content }}
+                                />
+                              )}
+
+                              {/* Subsections */}
+                              {section.subsections?.map((subsection) => (
+                                <div key={subsection.id} className="space-y-2 mt-8">
+                                  <div className="flex items-baseline space-x-4">
+                                    <span className="font-bold text-center w-16">{subsection.number}</span>
+                                    <span className="font-bold">{subsection.title}</span>
+                                  </div>
+                                  
+                                  {editingSection === section.id && editingSubsection === subsection.id ? (
+                                    <div className="pl-20">
+                                      <InlineEditor
+                                        initialContent={subsection.content}
+                                        onSave={saveEditedContent}
+                                        onCancel={cancelEditing}
+                                      />
+                                    </div>
+                                  ) : (
+                                    <div 
+                                      className="pl-20 hover:bg-gray-50 cursor-pointer"
+                                      onClick={() => startEditing(section.id, subsection.id)}
+                                      dangerouslySetInnerHTML={{ __html: subsection.content }}
+                                    />
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      
+                      {/* PDF pages start after report content */}
+                      {virtualRow.index > 0 && pdfPages.length > 0 && (
+                        <div className="pdf-page-container h-full flex flex-col justify-center items-center">
+                          {/* Show 2 PDF pages per virtual page */}
+                          {pdfPages[(virtualRow.index - 1) * 2] && (
+                            <div className="relative w-full mb-4">
+                              <button 
+                                className="absolute top-2 right-2 p-1 bg-white rounded-full shadow hover:bg-gray-100"
+                                onClick={() => removePdfPage((virtualRow.index - 1) * 2)}
+                              >
+                                <X className="h-4 w-4" />
+                              </button>
+                              <img 
+                                src={pdfPages[(virtualRow.index - 1) * 2]} 
+                                alt={`PDF Page ${(virtualRow.index - 1) * 2 + 1}`}
+                                className="w-full border-2 border-gray-200 shadow-sm"
+                              />
+                            </div>
+                          )}
+                          
+                          {pdfPages[(virtualRow.index - 1) * 2 + 1] && (
+                            <div className="relative w-full">
+                              <button 
+                                className="absolute top-2 right-2 p-1 bg-white rounded-full shadow hover:bg-gray-100"
+                                onClick={() => removePdfPage((virtualRow.index - 1) * 2 + 1)}
+                              >
+                                <X className="h-4 w-4" />
+                              </button>
+                              <img 
+                                src={pdfPages[(virtualRow.index - 1) * 2 + 1]} 
+                                alt={`PDF Page ${(virtualRow.index - 1) * 2 + 2}`}
+                                className="w-full border-2 border-gray-200 shadow-sm"
+                              />
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* Footer */}
+                    <div className="absolute bottom-0 left-0 right-0 px-[1in] py-4 flex justify-between text-sm bg-white border-t">
+                      <div>
+                        <div>Project Number: {metadata.projectNumber}</div>
+                        <div>Issued: {metadata.issueDate}</div>
+                      </div>
+                      <div>Page {virtualRow.index + 1} of {totalPages}</div>
+                    </div>
+                    
+                    {/* Page break indicator */}
+                    {virtualRow.index < totalPages - 1 && (
+                      <div 
+                        className="absolute bottom-0 left-0 right-0 border-b border-dashed border-gray-300"
+                        style={{ borderBottomWidth: '2px' }}
+                      />
+                    )}
                   </div>
-                  <div>Page | {currentPage}</div>
                 </div>
               </div>
-            </div>
-
-            {/* Page navigation */}
-            <div className="flex justify-center py-4 space-x-2 sticky bottom-0 bg-white border-t">
-              <button
-                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                disabled={currentPage === 1}
-                className="px-4 py-2 bg-gray-200 rounded disabled:opacity-50"
-              >
-                Previous
-              </button>
-              <span className="px-4 py-2">
-                Page {currentPage} of {totalPages}
-              </span>
-              <button
-                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                disabled={currentPage === totalPages}
-                className="px-4 py-2 bg-gray-200 rounded disabled:opacity-50"
-              >
-                Next
-              </button>
-            </div>
+            ))}
           </div>
-        ) : (
-          // Rich Text Editor View
-          <div className="p-4 h-full">
-            <div 
-              className="border border-gray-300 rounded-md p-4 min-h-[calc(100vh-120px)]"
-              onClick={() => editorRef.current?.focus()}
-            >
-              <Editor
-                ref={editorRef}
-                editorState={editorState}
-                onChange={setEditorState}
-                handleKeyCommand={handleKeyCommand}
-                placeholder="Paste or type your report here..."
-                spellCheck={true}
-              />
-            </div>
-          </div>
-        )}
+        </div>
       </div>
     </div>
   )
