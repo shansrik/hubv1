@@ -1,0 +1,369 @@
+"use client"
+
+import { useState, useRef, useEffect } from "react"
+import { SunIcon } from "lucide-react"
+import Image from "next/image"
+import PhotoGrid from "@/components/photo-grid"
+import { useToast } from "@/components/ui/use-toast"
+import type { ReportSection } from "@/types/document"
+import { Editor, EditorState, RichUtils, ContentState, convertFromHTML } from 'draft-js'
+import 'draft-js/dist/Draft.css'
+
+// Hardcoded sections starting from 4.0
+const SECTIONS: ReportSection[] = [
+  {
+    id: "4.0",
+    number: "4.0",
+    title: "Electrical Systems",
+    content: "Content for electrical systems...",
+    subsections: [
+      {
+        id: "4.01",
+        number: "4.01",
+        title: "Power Distribution",
+        content: "Details about power distribution...",
+      },
+      {
+        id: "4.02",
+        number: "4.02",
+        title: "Lighting",
+        content: "Information about lighting systems...",
+      },
+    ],
+  },
+  {
+    id: "5.0",
+    number: "5.0",
+    title: "Plumbing Systems",
+    content: "Content for plumbing systems...",
+    subsections: [
+      {
+        id: "5.01",
+        number: "5.01",
+        title: "Water Supply",
+        content: "Details about water supply...",
+      },
+    ],
+  },
+  {
+    id: "6.0",
+    number: "6.0",
+    title: "Mechanical Systems",
+    content: `It has been assumed that the following items will be repaired and/or replaced on an as-needed basis from the maintenance contract and/or the operating budget:
+
+• Control system components, gauges, shut-off valves
+• Small pumps, fans and motors (less than 1 HP)
+• Ductwork (including cleaning, balancing and insulation)
+• Miscellaneous exhaust fans (garbage room, electrical room, etc.)`,
+    subsections: [
+      {
+        id: "6.01",
+        number: "6.01",
+        title: "Heating Boilers",
+        content:
+          "Heating water is provided by XX gas-fired boilers located in the XX room. Each boiler is rated at XXX MBTU/hr heating input.\n\nReplacement of the heating boilers every 25 years and overhauling them once between replacement periods has been included in the Reserve Fund Study.",
+      },
+      {
+        id: "6.02",
+        number: "6.02",
+        title: "Central Cooling System",
+        content:
+          "Cooling and heat rejection are provided by a XX ton closed/open loop cooling tower located on the mechanical penthouse roof and a chiller located in the XXXX room.\n\nReplacement of the units every 25 years and overhauling them once between replacement periods has been included in the Reserve Fund Study.",
+      },
+      {
+        id: "6.03",
+        number: "6.03",
+        title: "HVAC Distribution System",
+        content:
+          "The hydronic HVAC distribution system includes two XX HP circulation pumps for the XX loops, chemical treatment system, expansion tanks, heat exchangers for XX loops, valves, etc.\n\nThe Reserve Fund Study has included for the following:\n\n• Replacement of the main circulation pumps for the heating and cooling loops every 20 years.\n\n• As-needed repair and replacement of the HVAC distribution equipment and piping every 5 years.",
+      },
+    ],
+  },
+]
+
+export default function UnifiedReportEditor() {
+  // Photo grid state
+  const [selectedPhotos, setSelectedPhotos] = useState<string[]>([])
+  const [filterQuery, setFilterQuery] = useState("")
+  const [isGenerating, setIsGenerating] = useState(false)
+  
+  // Technical report state
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  
+  // Rich text editor state
+  const [editorState, setEditorState] = useState(() => 
+    EditorState.createEmpty()
+  )
+  const [showTechnicalReport, setShowTechnicalReport] = useState(true)
+  
+  // Refs
+  const contentRef = useRef<HTMLDivElement>(null)
+  const editorRef = useRef<Editor>(null)
+  
+  // Toast
+  const { toast } = useToast()
+
+  // Logo configuration
+  const logo = {
+    url: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Cion-2022_logo-ai-EX34VT0pWcJr3Q13MkaRjWcjee98lR.svg",
+    width: 100,
+    height: 40,
+  }
+
+  // Report metadata
+  const projectNumber = "RZ1324-0XXX-00"
+  const issueDate = "June 1, 2020"
+  const companyName = "Halton Condominium Corporation No. XX"
+  const documentTitle = "Class 1/2/3 Comprehensive/Updated Reserve Fund Study"
+
+  // Calculate total pages based on content height
+  useEffect(() => {
+    if (contentRef.current) {
+      const contentHeight = contentRef.current.scrollHeight
+      const pageHeight = 1056 // A4 height in pixels at 96 DPI
+      setTotalPages(Math.ceil(contentHeight / pageHeight))
+    }
+  }, [])
+
+  // Handle text generation
+  const handleGenerateText = async (selectedText = "") => {
+    try {
+      setIsGenerating(true)
+      // AI text generation logic here
+      toast({
+        title: "Text generated",
+        description: "AI-generated text has been inserted into your report.",
+      })
+    } catch (error) {
+      toast({
+        title: "Generation failed",
+        description: "Failed to generate text. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsGenerating(false)
+    }
+  }
+
+  // Rich text editor key commands
+  const handleKeyCommand = (command: string, editorState: EditorState) => {
+    const newState = RichUtils.handleKeyCommand(editorState, command)
+    if (newState) {
+      setEditorState(newState)
+      return 'handled'
+    }
+    return 'not-handled'
+  }
+
+  // Toggle between rich text editor and technical report
+  const toggleEditorView = () => {
+    setShowTechnicalReport(!showTechnicalReport)
+  }
+
+  // Rich text editor toolbar actions
+  const toggleInlineStyle = (style: string) => {
+    setEditorState(RichUtils.toggleInlineStyle(editorState, style))
+  }
+
+  const toggleBlockType = (blockType: string) => {
+    setEditorState(RichUtils.toggleBlockType(editorState, blockType))
+  }
+
+  return (
+    <div className="flex h-screen">
+      {/* Left panel - Photo grid */}
+      <div className="w-1/3 border-r border-gray-200 overflow-y-auto p-4 bg-gray-50">
+        <div className="flex justify-between items-center mb-4">
+          <h1 className="text-xl font-bold text-gray-900">Photos</h1>
+          <button className="p-2 rounded-full hover:bg-gray-200">
+            <SunIcon className="h-5 w-5 text-gray-600" />
+          </button>
+        </div>
+
+        <div className="mb-4">
+          <input
+            type="text"
+            placeholder="Filter photos..."
+            className="w-full p-2 bg-white border border-gray-300 rounded-md"
+            value={filterQuery}
+            onChange={(e) => setFilterQuery(e.target.value)}
+          />
+        </div>
+
+        <PhotoGrid
+          filterQuery={filterQuery}
+          selectedPhotos={selectedPhotos}
+          onSelectPhoto={(id) => {
+            if (selectedPhotos.includes(id)) {
+              setSelectedPhotos(selectedPhotos.filter((photoId) => photoId !== id))
+            } else {
+              setSelectedPhotos([...selectedPhotos, id])
+            }
+          }}
+        />
+      </div>
+
+      {/* Right panel - Editor/Report Toggle */}
+      <div className="w-2/3 flex flex-col bg-white overflow-y-auto">
+        {/* Editor Controls */}
+        <div className="border-b border-gray-200 p-2 flex items-center justify-between">
+          <div className="flex space-x-2">
+            <button 
+              onClick={() => toggleInlineStyle('BOLD')}
+              className="p-1 rounded hover:bg-gray-100"
+            >
+              <span className="font-bold">B</span>
+            </button>
+            <button 
+              onClick={() => toggleInlineStyle('ITALIC')}
+              className="p-1 rounded hover:bg-gray-100"
+            >
+              <span className="italic">I</span>
+            </button>
+            <button 
+              onClick={() => toggleInlineStyle('UNDERLINE')}
+              className="p-1 rounded hover:bg-gray-100"
+            >
+              <span className="underline">U</span>
+            </button>
+            <button 
+              onClick={() => toggleBlockType('header-one')}
+              className="p-1 rounded hover:bg-gray-100"
+            >
+              H1
+            </button>
+            <button 
+              onClick={() => toggleBlockType('header-two')}
+              className="p-1 rounded hover:bg-gray-100"
+            >
+              H2
+            </button>
+            <button 
+              onClick={() => toggleBlockType('unordered-list-item')}
+              className="p-1 rounded hover:bg-gray-100"
+            >
+              • List
+            </button>
+          </div>
+          <button 
+            onClick={toggleEditorView}
+            className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600"
+          >
+            {showTechnicalReport ? "Switch to Rich Text" : "Switch to Technical Report"}
+          </button>
+        </div>
+
+        {/* Content Area */}
+        {showTechnicalReport ? (
+          // Technical Report View
+          <div className="min-h-full bg-white">
+            <div className="max-w-[8.5in] mx-auto">
+              {/* Page content */}
+              <div
+                ref={contentRef}
+                className="p-[1in] min-h-[11in] relative"
+                style={{
+                  fontFamily: "Arial, sans-serif",
+                  fontSize: "11pt",
+                  lineHeight: "1.5",
+                }}
+              >
+                {/* Header */}
+                <div className="flex justify-between items-start mb-8">
+                  <div>
+                    <div className="text-red-600 font-bold mb-1">{companyName}</div>
+                    <div className="text-black">{documentTitle}</div>
+                  </div>
+                  <Image
+                    src={logo?.url || "/placeholder.svg"}
+                    alt="Cion Logo"
+                    width={logo?.width || 100}
+                    height={logo?.height || 100}
+                    className="object-contain"
+                    priority
+                  />
+                </div>
+
+                {/* Main content */}
+                <div className="space-y-6">
+                  {SECTIONS.map((section) => (
+                    <div key={section.id} className="space-y-4">
+                      {/* Main section header */}
+                      <div className="flex items-baseline space-x-2">
+                        <span className="text-xl font-bold">{section.number}</span>
+                        <span className="text-xl font-bold">|</span>
+                        <span className="text-xl font-bold text-red-600">{section.title}</span>
+                      </div>
+
+                      {/* Main section content */}
+                      <div className="whitespace-pre-line pl-4">{section.content}</div>
+
+                      {/* Subsections */}
+                      {section.subsections?.map((subsection) => (
+                        <div key={subsection.id} className="space-y-2 mt-8">
+                          <div className="flex items-baseline space-x-4">
+                            <span className="font-bold text-center w-16">{subsection.number}</span>
+                            <span className="font-bold">{subsection.title}</span>
+                          </div>
+                          <div className="whitespace-pre-line pl-20">{subsection.content}</div>
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Footer */}
+                <div className="absolute bottom-[1in] left-[1in] right-[1in] flex justify-between text-sm">
+                  <div>
+                    <div>Project Number: {projectNumber}</div>
+                    <div>Issued: {issueDate}</div>
+                  </div>
+                  <div>Page | {currentPage}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Page navigation */}
+            <div className="flex justify-center py-4 space-x-2 sticky bottom-0 bg-white border-t">
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="px-4 py-2 bg-gray-200 rounded disabled:opacity-50"
+              >
+                Previous
+              </button>
+              <span className="px-4 py-2">
+                Page {currentPage} of {totalPages}
+              </span>
+              <button
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="px-4 py-2 bg-gray-200 rounded disabled:opacity-50"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        ) : (
+          // Rich Text Editor View
+          <div className="p-4 h-full">
+            <div 
+              className="border border-gray-300 rounded-md p-4 min-h-[calc(100vh-120px)]"
+              onClick={() => editorRef.current?.focus()}
+            >
+              <Editor
+                ref={editorRef}
+                editorState={editorState}
+                onChange={setEditorState}
+                handleKeyCommand={handleKeyCommand}
+                placeholder="Paste or type your report here..."
+                spellCheck={true}
+              />
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+} 
