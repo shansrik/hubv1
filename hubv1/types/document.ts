@@ -1,53 +1,21 @@
 import type React from "react"
-export interface ReportSection {
-  id: string
-  number: string
-  title: string
-  content: string
-  subsections?: ReportSubsection[]
+
+// Document block type for the block-style editor
+export interface DocumentBlock {
+  id: string;
+  type: string;
+  content: string;
+  aiAssisted?: boolean;
 }
 
-export interface ReportSubsection {
-  id: string
-  number: string
-  title: string
-  content: string
-}
-
-export interface ReportPage {
-  pageNumber: number
-  content: React.ReactNode
-}
-
-export interface DocumentTemplate {
-  id: string
-  name: string
-  description?: string
-  pageSize: string
-  orientation: "portrait" | "landscape"
-  margins: {
-    top: string
-    right: string
-    bottom: string
-    left: string
-  }
-  header?: {
-    height: string
-    content: string
-  }
-  footer?: {
-    height: string
-    content: string
-  }
-  sections: DocumentSection[]
-  css: string
-}
-
-interface DocumentSection {
-  id: string
-  type: "title" | "heading" | "text" | "image" | "table" | "list"
-  content?: string
-  properties?: Record<string, any>
-  styles?: Record<string, string>
+// Simple document structure for our application
+export interface Document {
+  id: string;
+  title: string;
+  blocks: DocumentBlock[];
+  images?: Array<{
+    id: string;
+    url: string;
+  }>;
 }
 

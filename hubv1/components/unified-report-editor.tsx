@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef, useEffect, useCallback } from "react"
+import { useState, useRef, useEffect } from "react"
 import { 
   SunIcon, 
   Bold, 
@@ -8,10 +8,24 @@ import {
   List, 
   Type, 
   ChevronDown, 
-  FilePlus, 
   FileDown, 
   Printer, 
-  X 
+  Plus,
+  X,
+  Image as ImageIcon,
+  Pencil,
+  Trash2,
+  Check,
+  Sparkles,
+  Underline,
+  Save,
+  Code,
+  Quote,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  AlignJustify,
+  Strikethrough
 } from "lucide-react"
 import Image from "next/image"
 import PhotoGrid from "@/components/photo-grid"
@@ -19,82 +33,14 @@ import { useToast } from "@/components/ui/use-toast"
 import type { ReportSection } from "@/types/document"
 import { exportToPDF } from "@/lib/utils"
 import InlineEditor from "@/components/inline-editor"
-import PaginatedReport from "@/components/paginated-report"
-import PDFDropZone from "@/components/pdf-drop-zone"
+import DocumentEditor from "@/components/document-editor"
 import { Button } from "@/components/ui/button"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { useVirtualizer } from "@tanstack/react-virtual"
+import { Input } from "@/components/ui/input"
 
-// Hardcoded sections starting from 4.0
-const SECTIONS: ReportSection[] = [
-  {
-    id: "4.0",
-    number: "4.0",
-    title: "Electrical Systems",
-    content: "Content for electrical systems...",
-    subsections: [
-      {
-        id: "4.01",
-        number: "4.01",
-        title: "Power Distribution",
-        content: "Details about power distribution...",
-      },
-      {
-        id: "4.02",
-        number: "4.02",
-        title: "Lighting",
-        content: "Information about lighting systems...",
-      },
-    ],
-  },
-  {
-    id: "5.0",
-    number: "5.0",
-    title: "Plumbing Systems",
-    content: "Content for plumbing systems...",
-    subsections: [
-      {
-        id: "5.01",
-        number: "5.01",
-        title: "Water Supply",
-        content: "Details about water supply...",
-      },
-    ],
-  },
-  {
-    id: "6.0",
-    number: "6.0",
-    title: "Mechanical Systems",
-    content: `It has been assumed that the following items will be repaired and/or replaced on an as-needed basis from the maintenance contract and/or the operating budget:
-
-• Control system components, gauges, shut-off valves
-• Small pumps, fans and motors (less than 1 HP)
-• Ductwork (including cleaning, balancing and insulation)
-• Miscellaneous exhaust fans (garbage room, electrical room, etc.)`,
-    subsections: [
-      {
-        id: "6.01",
-        number: "6.01",
-        title: "Heating Boilers",
-        content:
-          "Heating water is provided by XX gas-fired boilers located in the XX room. Each boiler is rated at XXX MBTU/hr heating input.\n\nReplacement of the heating boilers every 25 years and overhauling them once between replacement periods has been included in the Reserve Fund Study.",
-      },
-      {
-        id: "6.02",
-        number: "6.02",
-        title: "Central Cooling System",
-        content:
-          "Cooling and heat rejection are provided by a XX ton closed/open loop cooling tower located on the mechanical penthouse roof and a chiller located in the XXXX room.\n\nReplacement of the units every 25 years and overhauling them once between replacement periods has been included in the Reserve Fund Study.",
-      },
-      {
-        id: "6.03",
-        number: "6.03",
-        title: "HVAC Distribution System",
-        content:
-          "The hydronic HVAC distribution system includes two XX HP circulation pumps for the XX loops, chemical treatment system, expansion tanks, heat exchangers for XX loops, valves, etc.\n\nThe Reserve Fund Study has included for the following:\n\n• Replacement of the main circulation pumps for the heating and cooling loops every 20 years.\n\n• As-needed repair and replacement of the HVAC distribution equipment and piping every 5 years.",
-      },
-    ],
-  },
-]
+// Empty sections to start with
+const SECTIONS: ReportSection[] = []
 
 // Standard US Letter size in inches
 const LETTER_WIDTH_IN = 8.5
@@ -106,6 +52,31 @@ const PAGE_WIDTH_PX = LETTER_WIDTH_IN * DPI
 const PAGE_HEIGHT_PX = LETTER_HEIGHT_IN * DPI
 const MARGIN_PX = 1 * DPI // 1 inch margins
 
+// Sample photo URLs (in a real app these would come from an API)
+const SAMPLE_PHOTOS = [
+  "https://images.unsplash.com/photo-1497366754035-f200968a6e72?w=800&h=600&fit=crop",
+  "https://images.unsplash.com/photo-1497366811353-6870744d04b2?w=800&h=600&fit=crop",
+  "https://images.unsplash.com/photo-1524758631624-e2822e304c36?w=800&h=600&fit=crop",
+]
+
+interface CustomPage {
+  id: string;
+  content: string;
+  images: Array<{
+    id: string;
+    url: string;
+    width: number;
+    height: number;
+  }>;
+}
+
+interface ReportPhoto {
+  id: string;
+  url: string;
+  sectionId: string | null;
+  subsectionId: string | null;
+}
+
 export default function UnifiedReportEditor() {
   // Photo grid state
   const [selectedPhotos, setSelectedPhotos] = useState<string[]>([])
@@ -116,12 +87,28 @@ export default function UnifiedReportEditor() {
   const [sections, setSections] = useState<ReportSection[]>(SECTIONS)
   const [editingSection, setEditingSection] = useState<string | null>(null)
   const [editingSubsection, setEditingSubsection] = useState<string | null>(null)
+  const [editingSectionTitle, setEditingSectionTitle] = useState<string | null>(null)
+  const [editingSubsectionTitle, setEditingSubsectionTitle] = useState<string | null>(null)
+  const [titleEditValue, setTitleEditValue] = useState("")
   
-  // PDF state
-  const [isPdfDropActive, setIsPdfDropActive] = useState(false)
-  const [pdfPages, setPdfPages] = useState<string[]>([])
+  // Custom pages state
+  const [customPages, setCustomPages] = useState<CustomPage[]>([])
+  const [editingCustomPage, setEditingCustomPage] = useState<string | null>(null)
   
-  // Virtualization state
+  // Photo insertion state
+  const [reportPhotos, setReportPhotos] = useState<ReportPhoto[]>([])
+  const [isInsertingPhoto, setIsInsertingPhoto] = useState(false)
+  
+  // Header editing state
+  const [editingHeader, setEditingHeader] = useState(false)
+  const [headerData, setHeaderData] = useState({
+    companyName: "Halton Condominium Corporation No. XX",
+    documentTitle: "Class 1/2/3 Comprehensive/Updated Reserve Fund Study",
+    projectNumber: "RZ1324-0XXX-00",
+    issueDate: "June 1, 2020",
+  })
+  
+  // Page management state
   const [totalPages, setTotalPages] = useState(1)
   const [currentPage, setCurrentPage] = useState(1)
   
@@ -140,12 +127,49 @@ export default function UnifiedReportEditor() {
     height: 40,
   }
 
-  // Report metadata
-  const metadata = {
-    projectNumber: "RZ1324-0XXX-00",
-    issueDate: "June 1, 2020",
-    companyName: "Halton Condominium Corporation No. XX",
-    documentTitle: "Class 1/2/3 Comprehensive/Updated Reserve Fund Study"
+  // Add new state for editing main content
+  const [editingMainContent, setEditingMainContent] = useState(false)
+  
+  // Formatting toolbar state
+  const [activeBlockId, setActiveBlockId] = useState<string | null>(null)
+  const [showFormat, setShowFormat] = useState<string | null>(null)
+  const [showAIMenu, setShowAIMenu] = useState<string | null>(null)
+  
+  // Store a reference to the document editor component
+  const documentEditorRef = useRef<any>(null)
+  
+  // Function to store the editor reference for direct control
+  const storeEditorMethodsRef = (methods: any) => {
+    console.log("Editor methods received:", methods)
+    
+    // Print all the methods for debugging
+    if (methods) {
+      console.log("Available methods:", Object.keys(methods))
+      
+      // Test one of the methods to make sure it's working
+      if (methods.getActiveBlockId) {
+        console.log("Current active block ID:", methods.getActiveBlockId())
+      }
+    }
+    
+    documentEditorRef.current = methods
+    
+    // Test method calls
+    setTimeout(() => {
+      try {
+        if (documentEditorRef.current && documentEditorRef.current.getActiveBlockId) {
+          const activeId = documentEditorRef.current.getActiveBlockId()
+          console.log("Active block after timeout:", activeId)
+          
+          if (activeId && documentEditorRef.current.changeBlockType) {
+            console.log("Testing changeBlockType on:", activeId)
+            documentEditorRef.current.changeBlockType(activeId, 'heading-one')
+          }
+        }
+      } catch (error) {
+        console.error("Error in test method call:", error)
+      }
+    }, 1000)
   }
 
   // Calculate number of pages based on content height
@@ -155,20 +179,23 @@ export default function UnifiedReportEditor() {
       
       const contentHeight = contentRef.current.scrollHeight
       const contentPerPage = PAGE_HEIGHT_PX - (2 * MARGIN_PX) - 120 // 120px for header/footer
-      const pageCount = Math.ceil(contentHeight / contentPerPage) + (pdfPages.length > 0 ? Math.ceil(pdfPages.length / 2) : 0)
+      
+      // Only consider content page (page 1) and explicit custom pages
+      // Do not automatically add a third page based on content height
+      let pageCount = 1 + customPages.length
       
       setTotalPages(Math.max(1, pageCount))
     }
     
     calculatePages()
     
-    // Recalculate when window resizes or when sections change
+    // Recalculate when window resizes or when content changes
     window.addEventListener('resize', calculatePages)
     
     return () => {
       window.removeEventListener('resize', calculatePages)
     }
-  }, [sections, pdfPages])
+  }, [sections, customPages])
   
   // Track current page based on scroll position
   useEffect(() => {
@@ -199,7 +226,11 @@ export default function UnifiedReportEditor() {
     count: totalPages,
     getScrollElement: () => reportContainerRef.current,
     estimateSize: () => PAGE_HEIGHT_PX + 40, // Page height + margin
-    overscan: 2,
+    overscan: 3, // Increased overscan to ensure last page is always rendered
+    measureElement: (element) => {
+      // This ensures pages are measured accurately
+      return element.getBoundingClientRect().height;
+    }
   })
 
   // Start editing a section or subsection
@@ -210,25 +241,180 @@ export default function UnifiedReportEditor() {
 
   // Save edited content
   const saveEditedContent = (html: string) => {
-    if (!editingSection) return
+    if (editingCustomPage) {
+      // Update custom page content
+      setCustomPages(prevPages => 
+        prevPages.map(page => 
+          page.id === editingCustomPage 
+            ? { ...page, content: html } 
+            : page
+        )
+      )
+      setEditingCustomPage(null)
+    } else {
+      // Save main content page
+      if (contentRef.current) {
+        contentRef.current.innerHTML = html
+      }
+      setEditingMainContent(false)
+    }
     
-    // Update the sections state
+    toast({
+      title: "Content saved",
+      description: "Your changes have been saved successfully."
+    })
+  }
+
+  // Cancel editing
+  const cancelEditing = () => {
+    setEditingSection(null)
+    setEditingSubsection(null)
+    setEditingCustomPage(null)
+    setEditingHeader(false)
+    setIsInsertingPhoto(false)
+    setEditingSectionTitle(null)
+    setEditingSubsectionTitle(null)
+    setTitleEditValue("")
+    setEditingMainContent(false)
+    setActiveBlockId(null)
+    setShowFormat(null)
+    setShowAIMenu(null)
+  }
+  
+  // Handle active block change
+  const handleActiveBlockChange = (blockId: string) => {
+    console.log("Active block changed to:", blockId)
+    setActiveBlockId(blockId)
+    
+    // Also try to focus the editor if possible
+    if (blockId && documentEditorRef.current?.focusEditor) {
+      documentEditorRef.current.focusEditor(blockId)
+    }
+  }
+  
+  // Handle format change
+  const handleFormatChange = (blockId: string, formatType: string) => {
+    const targetBlockId = blockId || getCurrentBlockId();
+    console.log("Format change requested:", targetBlockId, formatType)
+    console.log("Editor methods available:", !!documentEditorRef.current)
+    
+    if (!targetBlockId) {
+      console.error("No target block ID available for format change")
+      setShowFormat(null)
+      return
+    }
+    
+    if (documentEditorRef.current) {
+      console.log("Available methods:", Object.keys(documentEditorRef.current))
+    }
+    
+    if (documentEditorRef.current && typeof documentEditorRef.current.changeBlockType === 'function') {
+      console.log("Calling changeBlockType...")
+      try {
+        documentEditorRef.current.changeBlockType(targetBlockId, formatType)
+        console.log("Call successful")
+      } catch (error) {
+        console.error("Error calling changeBlockType:", error)
+      }
+    } else {
+      console.warn("changeBlockType method not available or not a function")
+    }
+    setShowFormat(null)
+  }
+  
+  // Helper function to get the current active block ID
+  const getCurrentBlockId = () => {
+    return activeBlockId || 
+      (documentEditorRef.current?.getActiveBlockId ? 
+        documentEditorRef.current.getActiveBlockId() : "");
+  }
+
+  // Handle style toggle
+  const handleStyleToggle = (blockId: string, style: string) => {
+    const targetBlockId = blockId || getCurrentBlockId();
+    console.log("Style toggle requested:", targetBlockId, style)
+    
+    if (!targetBlockId) {
+      console.error("No target block ID available for style toggle")
+      return
+    }
+    
+    if (documentEditorRef.current && typeof documentEditorRef.current.toggleInlineStyle === 'function') {
+      console.log("Calling toggleInlineStyle on block:", targetBlockId)
+      try {
+        documentEditorRef.current.toggleInlineStyle(targetBlockId, style)
+        console.log("Style toggle call successful")
+      } catch (error) {
+        console.error("Error calling toggleInlineStyle:", error)
+      }
+    } else {
+      console.warn("toggleInlineStyle method not available or not a function")
+    }
+  }
+  
+  // Handle AI enhancement
+  const handleAIEnhance = (promptType: string) => {
+    const targetBlockId = getCurrentBlockId();
+    console.log("AI enhance requested:", promptType, targetBlockId)
+    
+    if (!targetBlockId) {
+      console.error("No target block ID available for AI enhancement")
+      setShowAIMenu(null)
+      return
+    }
+    
+    if (documentEditorRef.current && typeof documentEditorRef.current.enhanceWithAI === 'function') {
+      console.log("Calling enhanceWithAI on block:", targetBlockId)
+      try {
+        documentEditorRef.current.enhanceWithAI(targetBlockId, promptType)
+        console.log("AI enhance call successful")
+      } catch (error) {
+        console.error("Error calling enhanceWithAI:", error)
+      }
+    } else {
+      console.warn("enhanceWithAI method not available or not a function")
+    }
+    setShowAIMenu(null)
+  }
+  
+  // Handle AI menu
+  const handleShowAIMenu = (blockId: string) => {
+    setShowAIMenu(blockId)
+  }
+  
+  // Start editing section title
+  const startEditingSectionTitle = (sectionId: string, currentTitle: string) => {
+    setEditingSectionTitle(sectionId)
+    setTitleEditValue(currentTitle)
+  }
+  
+  // Start editing subsection title
+  const startEditingSubsectionTitle = (sectionId: string, subsectionId: string, currentTitle: string) => {
+    setEditingSectionTitle(sectionId)
+    setEditingSubsectionTitle(subsectionId)
+    setTitleEditValue(currentTitle)
+  }
+  
+  // Save section title
+  const saveSectionTitle = () => {
+    if (!editingSectionTitle) return
+    
     setSections(prevSections => {
       return prevSections.map(section => {
-        if (section.id === editingSection) {
-          if (editingSubsection) {
-            // Update subsection content
+        if (section.id === editingSectionTitle) {
+          if (editingSubsectionTitle) {
+            // Update subsection title
             return {
               ...section,
               subsections: section.subsections?.map(subsection => 
-                subsection.id === editingSubsection 
-                  ? { ...subsection, content: html }
+                subsection.id === editingSubsectionTitle 
+                  ? { ...subsection, title: titleEditValue }
                   : subsection
               )
             }
           } else {
-            // Update section content
-            return { ...section, content: html }
+            // Update section title
+            return { ...section, title: titleEditValue }
           }
         }
         return section
@@ -236,29 +422,15 @@ export default function UnifiedReportEditor() {
     })
     
     // Reset editing state
-    setEditingSection(null)
-    setEditingSubsection(null)
-  }
-
-  // Cancel editing
-  const cancelEditing = () => {
-    setEditingSection(null)
-    setEditingSubsection(null)
-  }
-
-  // Get content for current editing
-  const getEditingContent = useCallback(() => {
-    if (!editingSection) return ""
+    setEditingSectionTitle(null)
+    setEditingSubsectionTitle(null)
+    setTitleEditValue("")
     
-    if (editingSubsection) {
-      const section = sections.find(s => s.id === editingSection)
-      const subsection = section?.subsections?.find(ss => ss.id === editingSubsection)
-      return subsection?.content || ""
-    } else {
-      const section = sections.find(s => s.id === editingSection)
-      return section?.content || ""
-    }
-  }, [editingSection, editingSubsection, sections])
+    toast({
+      title: "Title Updated",
+      description: "Section title has been updated successfully."
+    })
+  }
 
   // Export report to PDF
   const handleExportPDF = async () => {
@@ -270,7 +442,7 @@ export default function UnifiedReportEditor() {
         description: "Please wait while we generate your PDF..."
       })
       
-      const result = await exportToPDF(reportPagesRef.current, `Report-${metadata.projectNumber}.pdf`)
+      const result = await exportToPDF(reportPagesRef.current, `Report-${headerData.projectNumber}.pdf`)
       
       if (result) {
         toast({
@@ -288,25 +460,171 @@ export default function UnifiedReportEditor() {
     }
   }
   
-  // Handle PDF import
-  const handlePdfImport = (pdfImages: string[], pageCount: number) => {
-    setPdfPages([...pdfPages, ...pdfImages])
-    setIsPdfDropActive(false)
+  // Add a new custom page
+  const addNewPage = () => {
+    const newPageId = `custom-page-${Date.now()}`
+    
+    setCustomPages([
+      ...customPages,
+      {
+        id: newPageId,
+        content: "<p>Click to edit this page content...</p>",
+        images: []
+      }
+    ])
     
     toast({
-      title: "PDF Imported",
-      description: `${pageCount} pages imported successfully.`
+      title: "Page Added",
+      description: "A new page has been added to your report."
     })
   }
   
-  // Toggle PDF drop zone
-  const togglePdfDropZone = () => {
-    setIsPdfDropActive(!isPdfDropActive)
+  // Delete a custom page
+  const deletePage = (pageId: string) => {
+    setCustomPages(customPages.filter(page => page.id !== pageId))
+    
+    toast({
+      title: "Page Deleted",
+      description: "The page has been removed from your report."
+    })
   }
   
-  // Remove a PDF page
-  const removePdfPage = (index: number) => {
-    setPdfPages(pdfPages.filter((_, i) => i !== index))
+  // Start photo insertion mode
+  const startPhotoInsertion = () => {
+    if (selectedPhotos.length === 0) {
+      toast({
+        title: "No Photo Selected",
+        description: "Please select a photo from the left panel first.",
+        variant: "destructive"
+      })
+      return
+    }
+    
+    setIsInsertingPhoto(true)
+    
+    toast({
+      title: "Insert Photo",
+      description: "Click on a section or subsection to insert the selected photo."
+    })
+  }
+  
+  // Insert photo into section or subsection
+  const insertPhoto = (sectionId: string, subsectionId?: string) => {
+    if (!isInsertingPhoto || selectedPhotos.length === 0) return
+    
+    // Add photo to report photos
+    const newPhoto = {
+      id: `photo-${Date.now()}`,
+      url: selectedPhotos[0], // Use first selected photo
+      sectionId,
+      subsectionId: subsectionId || null
+    }
+    
+    setReportPhotos([...reportPhotos, newPhoto])
+    
+    // Clear selected photos and exit insertion mode
+    setSelectedPhotos([])
+    setIsInsertingPhoto(false)
+    
+    toast({
+      title: "Photo Inserted",
+      description: "The selected photo has been added to the report."
+    })
+  }
+  
+  // Insert photo into custom page
+  const insertPhotoToCustomPage = (pageId: string) => {
+    if (selectedPhotos.length === 0) {
+      toast({
+        title: "No Photo Selected",
+        description: "Please select a photo from the left panel first.",
+        variant: "destructive"
+      })
+      return
+    }
+    
+    setCustomPages(prevPages => 
+      prevPages.map(page => {
+        if (page.id === pageId) {
+          return {
+            ...page,
+            images: [
+              ...page.images,
+              {
+                id: `image-${Date.now()}`,
+                url: selectedPhotos[0], // Use the first selected photo
+                width: 400,
+                height: 300
+              }
+            ]
+          }
+        }
+        return page
+      })
+    )
+    
+    // Clear selected photos after inserting
+    setSelectedPhotos([])
+    
+    toast({
+      title: "Photo Added",
+      description: "The selected photo has been added to the page."
+    })
+  }
+  
+  // Remove a photo from a report
+  const removePhoto = (photoId: string) => {
+    setReportPhotos(reportPhotos.filter(photo => photo.id !== photoId))
+  }
+  
+  // Remove a photo from a custom page
+  const removePhotoFromCustomPage = (pageId: string, photoId: string) => {
+    setCustomPages(prevPages => 
+      prevPages.map(page => {
+        if (page.id === pageId) {
+          return {
+            ...page,
+            images: page.images.filter(img => img.id !== photoId)
+          }
+        }
+        return page
+      })
+    )
+  }
+  
+  // Start editing a custom page
+  const startEditingCustomPage = (pageId: string) => {
+    // Clear any other editing state first
+    setEditingSection(null)
+    setEditingSubsection(null)
+    setEditingSectionTitle(null)
+    setEditingSubsectionTitle(null)
+    
+    // Set the custom page editing state
+    setEditingCustomPage(pageId)
+    
+    // Focus on the editor after a short delay
+    setTimeout(() => {
+      const editorElement = document.querySelector('.DraftEditor-root')
+      if (editorElement) {
+        editorElement.scrollIntoView({ behavior: 'smooth' })
+      }
+    }, 100)
+  }
+  
+  // Toggle header editing mode
+  const toggleHeaderEditing = () => {
+    setEditingHeader(!editingHeader)
+  }
+  
+  // Save header changes
+  const saveHeaderChanges = () => {
+    setEditingHeader(false)
+    
+    toast({
+      title: "Header Updated",
+      description: "Report header information has been updated."
+    })
   }
 
   // Handle AI text generation
@@ -337,11 +655,12 @@ export default function UnifiedReportEditor() {
           <h1 className="text-xl font-bold text-gray-900">Photos</h1>
           <div className="flex items-center gap-2">
             <button 
-              className="p-2 rounded-full hover:bg-gray-200" 
-              title="Import PDF"
-              onClick={togglePdfDropZone}
+              className="p-2 rounded-full hover:bg-gray-200"
+              title="Insert Photo"
+              onClick={startPhotoInsertion}
+              disabled={selectedPhotos.length === 0}
             >
-              <FilePlus className="h-5 w-5 text-gray-600" />
+              <ImageIcon className={`h-5 w-5 ${selectedPhotos.length === 0 ? 'text-gray-400' : 'text-blue-600'}`} />
             </button>
             <button 
               className="p-2 rounded-full hover:bg-gray-200"
@@ -370,51 +689,437 @@ export default function UnifiedReportEditor() {
           />
         </div>
 
-        {isPdfDropActive ? (
-          <PDFDropZone 
-            onImport={handlePdfImport}
-            isActive={true}
-          />
-        ) : (
-          <PhotoGrid
-            filterQuery={filterQuery}
-            selectedPhotos={selectedPhotos}
-            onSelectPhoto={(id) => {
-              if (selectedPhotos.includes(id)) {
-                setSelectedPhotos(selectedPhotos.filter((photoId) => photoId !== id))
-              } else {
-                setSelectedPhotos([...selectedPhotos, id])
-              }
-            }}
-          />
-        )}
+        <PhotoGrid
+          filterQuery={filterQuery}
+          selectedPhotos={selectedPhotos}
+          onSelectPhoto={(id) => {
+            if (selectedPhotos.includes(id)) {
+              setSelectedPhotos(selectedPhotos.filter((photoId) => photoId !== id))
+            } else {
+              setSelectedPhotos([...selectedPhotos, id])
+            }
+          }}
+        />
       </div>
 
       {/* Right panel - Technical Report with Pagination */}
       <div className="w-2/3 flex flex-col bg-white overflow-hidden">
-        {/* Report toolbar */}
-        <div className="border-b border-gray-200 p-2 flex items-center justify-between bg-gray-50">
-          <div className="text-sm">
-            Page {currentPage} of {totalPages}
+        {/* Report toolbar with document formatting controls */}
+        <div className="bg-gray-50 border-b border-gray-200">
+          {/* Main toolbar with page controls */}
+          <div className="p-2 flex items-center justify-between">
+            <div className="text-sm">
+              Page {currentPage} of {totalPages}
+            </div>
+            <div className="flex items-center space-x-2">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button 
+                    size="sm" 
+                    variant="outline"
+                  >
+                    <Plus className="h-4 w-4 mr-1" />
+                    Add
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-48 p-0">
+                  <div className="flex flex-col">
+                    <Button 
+                      variant="ghost"
+                      onClick={addNewPage} 
+                      className="justify-start"
+                    >
+                      <span>Add Blank Page</span>
+                    </Button>
+                    <Button 
+                      variant="ghost"
+                      onClick={() => {
+                        const newPageId = `custom-page-${Date.now()}`
+                        setCustomPages([
+                          ...customPages,
+                          {
+                            id: newPageId,
+                            content: "", // Empty content - let the editor handle it
+                            images: []
+                          }
+                        ])
+                        setTimeout(() => startEditingCustomPage(newPageId), 100)
+                      }}
+                      className="justify-start"
+                    >
+                      <span>Add New Page</span>
+                    </Button>
+                  </div>
+                </PopoverContent>
+              </Popover>
+              
+              <Button 
+                size="sm"
+                variant={isInsertingPhoto ? "default" : "outline"}
+                onClick={startPhotoInsertion}
+                disabled={selectedPhotos.length === 0}
+              >
+                <ImageIcon className="h-4 w-4 mr-1" />
+                Insert Photo
+              </Button>
+              <Button 
+                size="sm"
+                onClick={toggleHeaderEditing}
+              >
+                <Pencil className="h-4 w-4 mr-1" />
+                Edit Header
+              </Button>
+              <Button 
+                size="sm"
+                onClick={handleExportPDF}
+              >
+                <FileDown className="h-4 w-4 mr-1" />
+                Export PDF
+              </Button>
+            </div>
           </div>
-          <div className="flex items-center space-x-2">
-            <Button 
-              size="sm" 
-              variant="outline"
-              onClick={togglePdfDropZone}
-            >
-              <FilePlus className="h-4 w-4 mr-1" />
-              Import PDF
-            </Button>
-            <Button 
-              size="sm"
-              onClick={handleExportPDF}
-            >
-              <FileDown className="h-4 w-4 mr-1" />
-              Export PDF
-            </Button>
-          </div>
+          
+          {/* Formatting toolbar - only shown when editing */}
+          {(editingMainContent || editingCustomPage) && (
+            <div className="formatting-toolbar p-2 border-t border-gray-200 bg-gray-50 flex items-center">
+              {/* Format menu */}
+              <Popover 
+                open={showFormat !== null} 
+                onOpenChange={(open) => {
+                  // Get current active block from editor methods if needed
+                  const currentActiveBlock = 
+                    activeBlockId || 
+                    (documentEditorRef.current?.getActiveBlockId ? 
+                      documentEditorRef.current.getActiveBlockId() : null);
+                      
+                  setShowFormat(open ? currentActiveBlock : null);
+                  
+                  // Debug
+                  console.log("Format menu", open ? "opened" : "closed", "active block:", currentActiveBlock);
+                }}
+              >
+                <PopoverTrigger asChild>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-7 px-2"
+                    disabled={!activeBlockId && !(documentEditorRef.current?.getActiveBlockId?.())}
+                  >
+                    <Type className="h-3.5 w-3.5 mr-1" />
+                    <span className="text-xs">Format</span>
+                    <ChevronDown className="h-3 w-3 ml-1" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-48 p-1">
+                  <div className="flex flex-col space-y-1">
+                    <Button 
+                      variant="ghost"
+                      size="sm"
+                      className="justify-start"
+                      onClick={() => {
+                        const currentBlockId = activeBlockId || 
+                          (documentEditorRef.current?.getActiveBlockId ? 
+                            documentEditorRef.current.getActiveBlockId() : "");
+                        handleFormatChange(currentBlockId, 'text');
+                      }}
+                    >
+                      <span className="text-sm">Text</span>
+                    </Button>
+                    <Button 
+                      variant="ghost"
+                      size="sm"
+                      className="justify-start"
+                      onClick={() => {
+                        const currentBlockId = activeBlockId || 
+                          (documentEditorRef.current?.getActiveBlockId ? 
+                            documentEditorRef.current.getActiveBlockId() : "");
+                        handleFormatChange(currentBlockId, 'heading-one');
+                      }}
+                    >
+                      <span className="text-lg font-bold">Heading 1</span>
+                    </Button>
+                    <Button 
+                      variant="ghost"
+                      size="sm"
+                      className="justify-start"
+                      onClick={() => handleFormatChange(activeBlockId || "", 'heading-two')}
+                    >
+                      <span className="text-md font-bold">Heading 2</span>
+                    </Button>
+                    <Button 
+                      variant="ghost"
+                      size="sm"
+                      className="justify-start"
+                      onClick={() => handleFormatChange(activeBlockId || "", 'heading-three')}
+                    >
+                      <span className="text-sm font-bold">Heading 3</span>
+                    </Button>
+                    <Button 
+                      variant="ghost"
+                      size="sm"
+                      className="justify-start"
+                      onClick={() => handleFormatChange(activeBlockId || "", 'unordered-list')}
+                    >
+                      <List className="h-4 w-4 mr-2" />
+                      <span>Bullet List</span>
+                    </Button>
+                    <Button 
+                      variant="ghost"
+                      size="sm"
+                      className="justify-start"
+                      onClick={() => handleFormatChange(activeBlockId || "", 'ordered-list')}
+                    >
+                      <span className="w-4 mr-2 text-center">1.</span>
+                      <span>Numbered List</span>
+                    </Button>
+                    <Button 
+                      variant="ghost"
+                      size="sm"
+                      className="justify-start"
+                      onClick={() => handleFormatChange(activeBlockId || "", 'code')}
+                    >
+                      <Code className="h-4 w-4 mr-2" />
+                      <span>Code Block</span>
+                    </Button>
+                    <Button 
+                      variant="ghost"
+                      size="sm"
+                      className="justify-start"
+                      onClick={() => handleFormatChange(activeBlockId || "", 'quote')}
+                    >
+                      <Quote className="h-4 w-4 mr-2" />
+                      <span>Quote Block</span>
+                    </Button>
+                  </div>
+                </PopoverContent>
+              </Popover>
+              
+              {/* Inline formatting buttons */}
+              <div className="border-l border-gray-200 mx-1 h-5"></div>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="h-7 w-7 p-0"
+                onClick={() => handleStyleToggle("", 'BOLD')}
+              >
+                <Bold className="h-3.5 w-3.5" />
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="h-7 w-7 p-0"
+                onClick={() => handleStyleToggle("", 'ITALIC')}
+              >
+                <Italic className="h-3.5 w-3.5" />
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="h-7 w-7 p-0"
+                onClick={() => handleStyleToggle("", 'UNDERLINE')}
+              >
+                <Underline className="h-3.5 w-3.5" />
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="h-7 w-7 p-0"
+                onClick={() => handleStyleToggle("", 'STRIKETHROUGH')}
+              >
+                <Strikethrough className="h-3.5 w-3.5" />
+              </Button>
+              
+              {/* Text alignment */}
+              <div className="border-l border-gray-200 mx-1 h-5"></div>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="h-7 w-7 p-0"
+                onClick={() => handleStyleToggle("", 'ALIGN_LEFT')}
+              >
+                <AlignLeft className="h-3.5 w-3.5" />
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="h-7 w-7 p-0"
+                onClick={() => handleStyleToggle("", 'ALIGN_CENTER')}
+              >
+                <AlignCenter className="h-3.5 w-3.5" />
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="h-7 w-7 p-0"
+                onClick={() => handleStyleToggle("", 'ALIGN_RIGHT')}
+              >
+                <AlignRight className="h-3.5 w-3.5" />
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="h-7 w-7 p-0"
+                onClick={() => handleStyleToggle("", 'ALIGN_JUSTIFY')}
+              >
+                <AlignJustify className="h-3.5 w-3.5" />
+              </Button>
+              
+              {/* AI assistance button */}
+              <div className="border-l border-gray-200 mx-1 h-5"></div>
+              <Popover 
+                open={showAIMenu !== null} 
+                onOpenChange={(open) => {
+                  // Get current active block from editor methods if needed
+                  const currentActiveBlock = 
+                    activeBlockId || 
+                    (documentEditorRef.current?.getActiveBlockId ? 
+                      documentEditorRef.current.getActiveBlockId() : null);
+                      
+                  setShowAIMenu(open ? currentActiveBlock : null);
+                  
+                  // Debug
+                  console.log("AI menu", open ? "opened" : "closed", "active block:", currentActiveBlock);
+                }}
+              >
+                <PopoverTrigger asChild>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-7 px-2 text-yellow-500 hover:text-yellow-600 hover:bg-yellow-50"
+                    disabled={!activeBlockId && !(documentEditorRef.current?.getActiveBlockId?.())}
+                  >
+                    <Sparkles className="h-3.5 w-3.5 mr-1" />
+                    <span className="text-xs">AI</span>
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-56 p-1">
+                  <div className="flex flex-col space-y-1">
+                    <Button 
+                      variant="ghost"
+                      size="sm"
+                      className="justify-start"
+                      onClick={() => handleAIEnhance('follow-up')}
+                    >
+                      <Sparkles className="h-3.5 w-3.5 mr-2 text-yellow-500" />
+                      <span>Add follow-up sentence</span>
+                    </Button>
+                    <Button 
+                      variant="ghost"
+                      size="sm"
+                      className="justify-start"
+                      onClick={() => handleAIEnhance('professional')}
+                    >
+                      <Sparkles className="h-3.5 w-3.5 mr-2 text-yellow-500" />
+                      <span>Rewrite professionally</span>
+                    </Button>
+                    <Button 
+                      variant="ghost"
+                      size="sm"
+                      className="justify-start"
+                      onClick={() => handleAIEnhance('casual')}
+                    >
+                      <Sparkles className="h-3.5 w-3.5 mr-2 text-yellow-500" />
+                      <span>Rewrite casually</span>
+                    </Button>
+                    <Button 
+                      variant="ghost"
+                      size="sm"
+                      className="justify-start"
+                      onClick={() => handleAIEnhance('concise')}
+                    >
+                      <Sparkles className="h-3.5 w-3.5 mr-2 text-yellow-500" />
+                      <span>Make concise</span>
+                    </Button>
+                    <Button 
+                      variant="ghost"
+                      size="sm"
+                      className="justify-start"
+                      onClick={() => handleAIEnhance('expand')}
+                    >
+                      <Sparkles className="h-3.5 w-3.5 mr-2 text-yellow-500" />
+                      <span>Expand with details</span>
+                    </Button>
+                    <Button 
+                      variant="ghost"
+                      size="sm"
+                      className="justify-start"
+                      onClick={() => handleAIEnhance('grammar')}
+                    >
+                      <Sparkles className="h-3.5 w-3.5 mr-2 text-yellow-500" />
+                      <span>Fix grammar & spelling</span>
+                    </Button>
+                  </div>
+                </PopoverContent>
+              </Popover>
+
+              {/* Save and cancel buttons on the right */}
+              <div className="ml-auto flex space-x-2">
+                <Button size="sm" variant="outline" onClick={cancelEditing}>
+                  <X className="h-4 w-4 mr-1" />
+                  Cancel
+                </Button>
+                <Button 
+                  size="sm"
+                  onClick={() => {
+                    if (contentRef.current?.querySelector('.DraftEditor-root')) {
+                      // Trigger save from the editor
+                      const saveEvent = new CustomEvent('save-content')
+                      contentRef.current.dispatchEvent(saveEvent)
+                    }
+                  }}
+                >
+                  <Save className="h-4 w-4 mr-1" />
+                  Save
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
+        
+        {/* Header editing panel (when active) */}
+        {editingHeader && (
+          <div className="p-4 border-b border-gray-200 bg-gray-50">
+            <h3 className="text-md font-medium mb-3">Edit Report Header</h3>
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              <div>
+                <label className="text-sm text-gray-600 mb-1 block">Company Name</label>
+                <Input
+                  value={headerData.companyName}
+                  onChange={e => setHeaderData({...headerData, companyName: e.target.value})}
+                  className="w-full"
+                />
+              </div>
+              <div>
+                <label className="text-sm text-gray-600 mb-1 block">Document Title</label>
+                <Input
+                  value={headerData.documentTitle}
+                  onChange={e => setHeaderData({...headerData, documentTitle: e.target.value})}
+                  className="w-full"
+                />
+              </div>
+              <div>
+                <label className="text-sm text-gray-600 mb-1 block">Project Number</label>
+                <Input
+                  value={headerData.projectNumber}
+                  onChange={e => setHeaderData({...headerData, projectNumber: e.target.value})}
+                  className="w-full"
+                />
+              </div>
+              <div>
+                <label className="text-sm text-gray-600 mb-1 block">Issue Date</label>
+                <Input
+                  value={headerData.issueDate}
+                  onChange={e => setHeaderData({...headerData, issueDate: e.target.value})}
+                  className="w-full"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end space-x-2">
+              <Button size="sm" variant="outline" onClick={cancelEditing}>Cancel</Button>
+              <Button size="sm" onClick={saveHeaderChanges}>Save Changes</Button>
+            </div>
+          </div>
+        )}
         
         {/* Technical Report with virtualized pages */}
         <div 
@@ -434,154 +1139,131 @@ export default function UnifiedReportEditor() {
               position: 'relative',
             }}
           >
-            {rowVirtualizer.getVirtualItems().map((virtualRow) => (
-              <div
-                key={virtualRow.index}
-                className="report-page"
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  height: `${virtualRow.size}px`,
-                  transform: `translateY(${virtualRow.start}px)`,
-                  padding: '20px 0',
-                  display: 'flex',
-                  justifyContent: 'center',
-                }}
-              >
-                <div 
-                  className="bg-white shadow-lg"
+            {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+              // Determine if this is a report content page or a custom page
+              const isMainContentPage = virtualRow.index === 0
+              const isCustomPage = virtualRow.index > 0 && (virtualRow.index - 1) < customPages.length
+              
+              return (
+                <div
+                  key={virtualRow.key}
+                  ref={(el) => rowVirtualizer.measureElement(el)}
                   style={{
-                    width: `${PAGE_WIDTH_PX}px`,
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
                     height: `${PAGE_HEIGHT_PX}px`,
-                    position: 'relative',
-                    overflow: 'hidden',
+                    transform: `translateY(${virtualRow.start}px)`,
                   }}
                 >
-                  {/* Page content with header and footer */}
-                  <div className="relative h-full">
-                    {/* Header */}
-                    <div 
-                      className="absolute top-0 left-0 right-0 px-[1in] pt-[1in] pb-4 flex justify-between items-start"
-                      style={{ borderBottom: virtualRow.index === 0 ? 'none' : '1px solid #e5e7eb' }}
-                    >
-                      <div>
-                        <div className="text-red-600 font-bold mb-1">{metadata.companyName}</div>
-                        <div className="text-black">{metadata.documentTitle}</div>
+                  {/* Page container with white background and shadow */}
+                  <div 
+                    className="mx-auto bg-white shadow-md"
+                    style={{
+                      width: `${PAGE_WIDTH_PX}px`,
+                      height: `${PAGE_HEIGHT_PX}px`,
+                      position: 'relative',
+                      overflow: 'hidden'
+                    }}
+                  >
+                    {/* Header - now rendered on every page */}
+                    <div className="absolute top-[1in] left-[1in] right-[1in]">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <div className="text-red-600 font-bold">{headerData.companyName}</div>
+                          <div>{headerData.documentTitle}</div>
+                        </div>
+                        <div>
+                          {logo && (
+                            <Image
+                              src={logo.url}
+                              alt="Company Logo"
+                              width={logo.width}
+                              height={logo.height}
+                              priority
+                            />
+                          )}
+                        </div>
                       </div>
-                      <Image
-                        src={logo?.url || "/placeholder.svg"}
-                        alt="Logo"
-                        width={logo?.width || 100}
-                        height={logo?.height || 40}
-                        className="object-contain"
-                        priority
-                      />
                     </div>
-                    
-                    {/* Page content area */}
+
+                    {/* Page content - adjusted to account for header space */}
                     <div 
-                      ref={virtualRow.index === 0 ? contentRef : undefined}
-                      className="px-[1in] pt-[2in] pb-[1.5in]"
-                      style={{
-                        height: '100%',
-                        overflowY: 'hidden',
-                        fontFamily: "Arial, sans-serif",
-                        fontSize: "11pt",
-                        lineHeight: "1.5",
-                      }}
+                      className="absolute top-[2in] left-[1in] right-[1in] bottom-[1in] overflow-hidden"
                     >
-                      {/* Display report content on first virtual page */}
-                      {virtualRow.index === 0 && (
-                        <div className="space-y-6">
-                          {sections.map((section) => (
-                            <div key={section.id} className="space-y-4">
-                              {/* Main section header */}
-                              <div className="flex items-baseline space-x-2">
-                                <span className="text-xl font-bold">{section.number}</span>
-                                <span className="text-xl font-bold">|</span>
-                                <span className="text-xl font-bold text-red-600">{section.title}</span>
-                              </div>
-
-                              {/* Main section content - inline editing */}
-                              {editingSection === section.id && !editingSubsection ? (
-                                <InlineEditor
-                                  initialContent={section.content}
-                                  onSave={saveEditedContent}
-                                  onCancel={cancelEditing}
-                                />
-                              ) : (
-                                <div 
-                                  className="pl-4 hover:bg-gray-50 cursor-pointer"
-                                  onClick={() => startEditing(section.id)}
-                                  dangerouslySetInnerHTML={{ __html: section.content }}
-                                />
-                              )}
-
-                              {/* Subsections */}
-                              {section.subsections?.map((subsection) => (
-                                <div key={subsection.id} className="space-y-2 mt-8">
-                                  <div className="flex items-baseline space-x-4">
-                                    <span className="font-bold text-center w-16">{subsection.number}</span>
-                                    <span className="font-bold">{subsection.title}</span>
-                                  </div>
-                                  
-                                  {editingSection === section.id && editingSubsection === subsection.id ? (
-                                    <div className="pl-20">
-                                      <InlineEditor
-                                        initialContent={subsection.content}
-                                        onSave={saveEditedContent}
-                                        onCancel={cancelEditing}
-                                      />
-                                    </div>
-                                  ) : (
-                                    <div 
-                                      className="pl-20 hover:bg-gray-50 cursor-pointer"
-                                      onClick={() => startEditing(section.id, subsection.id)}
-                                      dangerouslySetInnerHTML={{ __html: subsection.content }}
-                                    />
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          ))}
+                      {/* Main content page */}
+                      {isMainContentPage && (
+                        <div ref={contentRef}>
+                          {editingMainContent ? (
+                            <DocumentEditor
+                              initialContent={contentRef.current?.innerHTML || ""}
+                              onSave={saveEditedContent}
+                              onCancel={cancelEditing}
+                              activeBlock={activeBlockId}
+                              onActiveBlockChange={handleActiveBlockChange}
+                              onFormatBlock={handleFormatChange}
+                              onToggleStyle={handleStyleToggle}
+                              onShowAIMenu={handleShowAIMenu}
+                              showToolbar={false}
+                              onRef={storeEditorMethodsRef}
+                            />
+                          ) : (
+                            <>
+                              <div 
+                                className="main-page-content prose max-w-none"
+                                dangerouslySetInnerHTML={{ __html: contentRef.current?.innerHTML || contentRef.current?.innerHTML === "" ? "<p>Click to edit this page content...</p>" : "" }}
+                                onClick={() => setEditingMainContent(true)}
+                                style={{ cursor: 'pointer' }}
+                              />
+                            </>
+                          )}
                         </div>
                       )}
                       
-                      {/* PDF pages start after report content */}
-                      {virtualRow.index > 0 && pdfPages.length > 0 && (
-                        <div className="pdf-page-container h-full flex flex-col justify-center items-center">
-                          {/* Show 2 PDF pages per virtual page */}
-                          {pdfPages[(virtualRow.index - 1) * 2] && (
-                            <div className="relative w-full mb-4">
-                              <button 
-                                className="absolute top-2 right-2 p-1 bg-white rounded-full shadow hover:bg-gray-100"
-                                onClick={() => removePdfPage((virtualRow.index - 1) * 2)}
-                              >
-                                <X className="h-4 w-4" />
-                              </button>
-                              <img 
-                                src={pdfPages[(virtualRow.index - 1) * 2]} 
-                                alt={`PDF Page ${(virtualRow.index - 1) * 2 + 1}`}
-                                className="w-full border-2 border-gray-200 shadow-sm"
-                              />
-                            </div>
+                      {/* Custom page content */}
+                      {isCustomPage && (
+                        <div>
+                          {editingCustomPage === customPages[virtualRow.index - 1].id ? (
+                            <DocumentEditor
+                              initialContent={customPages[virtualRow.index - 1].content}
+                              onSave={saveEditedContent}
+                              onCancel={cancelEditing}
+                              activeBlock={activeBlockId}
+                              onActiveBlockChange={handleActiveBlockChange}
+                              onFormatBlock={handleFormatChange}
+                              onToggleStyle={handleStyleToggle}
+                              onShowAIMenu={handleShowAIMenu}
+                              showToolbar={false}
+                              onRef={storeEditorMethodsRef}
+                            />
+                          ) : (
+                            <div 
+                              className="custom-page-content"
+                              dangerouslySetInnerHTML={{ __html: customPages[virtualRow.index - 1].content }}
+                              onClick={() => startEditingCustomPage(customPages[virtualRow.index - 1].id)}
+                              style={{ cursor: 'pointer' }}
+                            />
                           )}
                           
-                          {pdfPages[(virtualRow.index - 1) * 2 + 1] && (
-                            <div className="relative w-full">
-                              <button 
-                                className="absolute top-2 right-2 p-1 bg-white rounded-full shadow hover:bg-gray-100"
-                                onClick={() => removePdfPage((virtualRow.index - 1) * 2 + 1)}
-                              >
-                                <X className="h-4 w-4" />
-                              </button>
-                              <img 
-                                src={pdfPages[(virtualRow.index - 1) * 2 + 1]} 
-                                alt={`PDF Page ${(virtualRow.index - 1) * 2 + 2}`}
-                                className="w-full border-2 border-gray-200 shadow-sm"
-                              />
+                          {/* Custom page images */}
+                          {customPages[virtualRow.index - 1].images.length > 0 && (
+                            <div className="mt-4 grid grid-cols-2 gap-4">
+                              {customPages[virtualRow.index - 1].images.map(image => (
+                                <div key={image.id} className="relative">
+                                  <img 
+                                    src={image.url} 
+                                    alt="Report image" 
+                                    className="w-full h-auto rounded-md"
+                                  />
+                                  <button
+                                    className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1"
+                                    onClick={() => removePhotoFromCustomPage(customPages[virtualRow.index - 1].id, image.id)}
+                                  >
+                                    <X className="h-4 w-4" />
+                                  </button>
+                                </div>
+                              ))}
                             </div>
                           )}
                         </div>
@@ -589,25 +1271,17 @@ export default function UnifiedReportEditor() {
                     </div>
                     
                     {/* Footer */}
-                    <div className="absolute bottom-0 left-0 right-0 px-[1in] py-4 flex justify-between text-sm bg-white border-t">
+                    <div className="absolute bottom-[1in] left-[1in] right-[1in] flex justify-between text-sm">
                       <div>
-                        <div>Project Number: {metadata.projectNumber}</div>
-                        <div>Issued: {metadata.issueDate}</div>
+                        <div>Project Number: {headerData.projectNumber}</div>
+                        <div>Issued: {headerData.issueDate}</div>
                       </div>
-                      <div>Page {virtualRow.index + 1} of {totalPages}</div>
+                      <div>Page | {virtualRow.index + 1}</div>
                     </div>
-                    
-                    {/* Page break indicator */}
-                    {virtualRow.index < totalPages - 1 && (
-                      <div 
-                        className="absolute bottom-0 left-0 right-0 border-b border-dashed border-gray-300"
-                        style={{ borderBottomWidth: '2px' }}
-                      />
-                    )}
                   </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       </div>

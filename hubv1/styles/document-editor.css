@@ -1,0 +1,416 @@
+/* Document Editor Styles */
+
+/* General editor styling */
+.document-editor {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  line-height: 1.6;
+  color: #333;
+}
+
+/* Block styling */
+.editor-block {
+  position: relative;
+  transition: all 0.15s ease;
+  border-radius: 0.375rem;
+  margin-bottom: 0.5rem;
+}
+
+.editor-block:hover {
+  background-color: rgba(243, 244, 246, 0.7);
+}
+
+.editor-block.active {
+  background-color: rgba(243, 244, 246, 1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* Block type specific styling */
+.editor-block[data-type="heading-one"] .DraftEditor-root {
+  font-size: 1.875rem;
+  font-weight: 700;
+  line-height: 1.3;
+  color: #111827;
+}
+
+.editor-block[data-type="heading-two"] .DraftEditor-root {
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.3;
+  color: #1f2937;
+}
+
+.editor-block[data-type="heading-three"] .DraftEditor-root {
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1.3;
+  color: #374151;
+}
+
+.editor-block[data-type="quote"] .block-editor {
+  padding-left: 1rem;
+  border-left: 4px solid #e5e7eb;
+  font-style: italic;
+  color: #4b5563;
+}
+
+.editor-block[data-type="code"] .block-editor {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  background-color: #1f2937;
+  color: #f9fafb;
+  padding: 0.75rem;
+  border-radius: 0.375rem;
+  overflow-x: auto;
+}
+
+.editor-block[data-type="unordered-list"] .block-editor::before,
+.editor-block[data-type="ordered-list"] .block-editor::before {
+  position: absolute;
+  left: 0;
+}
+
+/* AI-enhanced content styling */
+.editor-block.ai-assisted {
+  background-color: rgba(219, 234, 254, 0.3);
+}
+
+.editor-block.ai-assisted:hover {
+  background-color: rgba(219, 234, 254, 0.5);
+}
+
+.editor-block.ai-assisted .block-editor {
+  color: #1e40af;
+}
+
+/* Block toolbar styling */
+.block-toolbar {
+  display: flex;
+  align-items: center;
+  padding: 0.25rem;
+  background-color: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.375rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  z-index: 10;
+}
+
+/* Block controls styling */
+.block-controls {
+  display: flex;
+  flex-direction: column;
+  position: absolute;
+  left: -2.5rem;
+  top: 0.75rem;
+}
+
+/* Button styling */
+.block-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 9999px;
+  background-color: white;
+  border: 1px solid #e5e7eb;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.block-button:hover {
+  background-color: #f3f4f6;
+  color: #111827;
+}
+
+.block-button.delete:hover {
+  background-color: #fee2e2;
+  color: #b91c1c;
+}
+
+/* AI menu styling */
+.ai-menu-button {
+  color: #eab308;
+}
+
+.ai-menu-button:hover {
+  background-color: #fef3c7;
+  color: #92400e;
+}
+
+/* Add block button styling */
+.add-block-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 0.75rem;
+  margin-top: 1rem;
+  border: 1px dashed #d1d5db;
+  border-radius: 0.375rem;
+  color: #6b7280;
+  font-size: 0.875rem;
+  transition: all 0.15s ease;
+}
+
+.add-block-button:hover {
+  border-color: #9ca3af;
+  color: #374151;
+  background-color: #f9fafb;
+}
+
+/* Draft.js specific overrides */
+.DraftEditor-root {
+  position: relative;
+  z-index: 1;
+  min-height: 40px;
+}
+
+.public-DraftEditorPlaceholder-root {
+  color: #9ca3af;
+  position: absolute;
+  z-index: 0;
+}
+
+.public-DraftEditor-content {
+  min-height: 40px;
+}
+
+/* AI-assisted block indicator in HTML output */
+.ai-assisted-block {
+  background-color: rgba(219, 234, 254, 0.3);
+  border-left: 3px solid rgba(59, 130, 246, 0.5);
+  padding-left: 16px;
+  position: relative;
+}
+
+.ai-assisted-block::after {
+  content: "✨ AI enhanced";
+  position: absolute;
+  top: 0;
+  right: 0;
+  font-size: 0.7rem;
+  padding: 2px 5px;
+  background-color: rgba(59, 130, 246, 0.1);
+  border-radius: 0 0 0 4px;
+  color: #1e40af;
+}
+
+/* Heading styles */
+.prose h1 {
+  font-size: 1.75em;
+  font-weight: bold;
+  margin-top: 20px;
+  margin-bottom: 10px;
+  color: #1a202c;
+}
+
+.prose h2 {
+  font-size: 1.4em;
+  font-weight: bold;
+  margin-top: 16px;
+  margin-bottom: 8px;
+  color: #1a202c;
+}
+
+.prose h3 {
+  font-size: 1.2em;
+  font-weight: bold;
+  margin-top: 14px;
+  margin-bottom: 7px;
+  color: #1a202c;
+}
+
+/* List styling */
+.prose ul {
+  list-style-type: disc;
+  padding-left: 20px;
+  margin-bottom: 16px;
+}
+
+.prose ul li {
+  margin-bottom: 8px;
+}
+
+/* Paragraph spacing */
+.prose p {
+  margin-bottom: 12px;
+}
+
+/* Section number display */
+.section-number {
+  display: inline-block;
+  margin-right: 10px;
+  font-weight: bold;
+}
+
+/* Pagination styling */
+.document-page {
+  background-color: white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  margin-bottom: 24px;
+  transition: transform 0.2s ease;
+  position: relative;
+}
+
+.document-page:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.page-number-indicator {
+  position: absolute;
+  top: -12px;
+  right: 16px;
+  background-color: #4B5563;
+  color: white;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.page-content-container {
+  padding: 24px;
+  min-height: 400px;
+  overflow-y: auto;
+  flex-grow: 1;
+}
+
+.page-header {
+  border-bottom: 1px solid #E5E7EB;
+  padding-bottom: 12px;
+  margin-bottom: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.page-footer {
+  border-top: 1px solid #E5E7EB;
+  padding-top: 12px;
+  margin-top: 16px;
+  font-size: 12px;
+  color: #6B7280;
+  display: flex;
+  justify-content: space-between;
+}
+
+/* Page navigation controls */
+.page-navigation {
+  display: flex;
+  align-items: center;
+  margin-bottom: 20px;
+  background: white;
+  border: 1px solid #E5E7EB;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.page-navigation-button {
+  background: transparent;
+  border: none;
+  padding: 8px 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-right: 1px solid #E5E7EB;
+}
+
+.page-navigation-button:last-child {
+  border-right: none;
+  border-left: 1px solid #E5E7EB;
+}
+
+.page-navigation-button:hover {
+  background-color: #F3F4F6;
+}
+
+.page-navigation-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.page-counter {
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #4B5563;
+}
+
+/* Add these styles to match the document formatting in the screenshot */
+.custom-page-content h1 {
+  font-size: 24px;
+  font-weight: bold;
+  margin-bottom: 16px;
+}
+
+.custom-page-content h2 {
+  font-size: 18px;
+  font-weight: bold;
+  margin-top: 24px;
+  margin-bottom: 12px;
+}
+
+.custom-page-content p {
+  margin-bottom: 12px;
+}
+
+.custom-page-content ul {
+  list-style-type: none;
+  padding-left: 20px;
+  margin-bottom: 16px;
+}
+
+.custom-page-content ul li {
+  display: flex;
+  align-items: start;
+  margin-bottom: 8px;
+}
+
+.custom-page-content ul li:before {
+  content: "•";
+  color: #dc2626; /* red-600 */
+  margin-right: 8px;
+  margin-top: 2px;
+}
+
+/* Section styling to match screenshot */
+.section-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.section-number {
+  font-size: 24px;
+  font-weight: bold;
+}
+
+.section-title {
+  font-size: 24px;
+  font-weight: bold;
+  color: #dc2626; /* red-600 */
+}
+
+.subsection-header {
+  display: flex;
+  align-items: baseline;
+  margin-bottom: 12px;
+}
+
+.subsection-number {
+  font-weight: bold;
+  width: 64px;
+  text-align: center;
+}
+
+.subsection-title {
+  font-weight: bold;
+}
+
+.subsection-content {
+  padding-left: 80px;
+}

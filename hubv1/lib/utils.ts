@@ -8,7 +8,7 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 // PDF Export utility function
-export async function exportToPDF(contentElement: HTMLElement, filename: string = 'report.pdf') {
+export async function exportToPDF(contentElement: HTMLElement, filename: string = 'document.pdf') {
   if (!contentElement) return
   
   // Configure PDF based on US Letter size
@@ -18,48 +18,41 @@ export async function exportToPDF(contentElement: HTMLElement, filename: string 
     format: 'letter' // 8.5x11 inches
   })
   
-  // Get all pages
-  const pageElements = contentElement.querySelectorAll('.report-page')
-  
-  if (pageElements.length === 0) {
-    // If no page elements found, export the entire container
-    try {
-      const canvas = await html2canvas(contentElement, {
-        scale: 2, // Higher scale for better quality
-        useCORS: true, // Allow images from different domains
-        logging: false
-      })
-      
-      const imgData = canvas.toDataURL('image/png')
-      const imgWidth = 8.5 // Letter width in inches
-      const imgHeight = (canvas.height * imgWidth) / canvas.width
-      
-      pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight)
-    } catch (err) {
-      console.error('Error generating PDF:', err)
-      throw err
+  try {
+    // Convert the entire document to an image
+    const canvas = await html2canvas(contentElement, {
+      scale: 2, // Higher scale for better quality
+      useCORS: true, // Allow images from different domains
+      logging: false
+    })
+    
+    const imgData = canvas.toDataURL('image/png')
+    const imgWidth = 8.5 // Letter width in inches
+    const pageHeight = 11 // Letter height in inches
+    const imgHeight = (canvas.height * imgWidth) / canvas.width
+    
+    // If content is longer than one page, split it into multiple pages
+    let heightLeft = imgHeight;
+    let position = 0;
+    let pageCount = 0;
+    
+    // Add first page
+    pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
+    heightLeft -= pageHeight;
+    pageCount++;
+    
+    // Add additional pages if needed
+    while (heightLeft > 0) {
+      position -= pageHeight;
+      pdf.addPage();
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
+      heightLeft -= pageHeight;
+      pageCount++;
     }
-  } else {
-    // Process each page individually
-    for (let i = 0; i < pageElements.length; i++) {
-      try {
-        if (i > 0) pdf.addPage()
-        
-        const pageElement = pageElements[i] as HTMLElement
-        const canvas = await html2canvas(pageElement, {
-          scale: 2,
-          useCORS: true,
-          logging: false
-        })
-        
-        const imgData = canvas.toDataURL('image/png')
-        
-        // Add image to PDF (full page)
-        pdf.addImage(imgData, 'PNG', 0, 0, 8.5, 11)
-      } catch (err) {
-        console.error(`Error generating page ${i+1}:`, err)
-      }
-    }
+    
+  } catch (err) {
+    console.error('Error generating PDF:', err)
+    throw err
   }
   
   // Save the PDF

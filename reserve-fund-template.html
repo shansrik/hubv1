@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reserve Fund Study</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            color: #333;
+            line-height: 1.6;
+        }
+        .document-container {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 15px;
+        }
+        .header-text {
+            flex: 1;
+        }
+        .corporation-name {
+            color: #d32f2f;
+            font-weight: bold;
+            font-size: 18px;
+            margin-bottom: 5px;
+        }
+        .document-title {
+            font-size: 16px;
+            font-weight: bold;
+        }
+        .logo-container {
+            width: 120px;
+            text-align: right;
+        }
+        .logo-container img {
+            max-width: 100%;
+            height: auto;
+        }
+        .section-title {
+            font-size: 24px;
+            margin-top: 40px;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+        .section-title span {
+            color: #d32f2f;
+        }
+        .subsection-title {
+            font-size: 18px;
+            margin-top: 30px;
+            margin-bottom: 15px;
+            font-weight: bold;
+        }
+        .content-block {
+            margin-bottom: 20px;
+        }
+        ul.amenities-list {
+            list-style-type: none;
+            padding-left: 0;
+        }
+        ul.amenities-list li {
+            margin-bottom: 15px;
+            padding-left: 30px;
+            position: relative;
+        }
+        ul.amenities-list li:before {
+            content: "•";
+            color: #d32f2f;
+            font-size: 20px;
+            position: absolute;
+            left: 10px;
+        }
+        .editable {
+            border: 1px dashed transparent;
+            padding: 2px 5px;
+            transition: border-color 0.3s;
+        }
+        .editable:hover {
+            border-color: #aaa;
+            cursor: text;
+        }
+    </style>
+</head>
+<body>
+    <div class="document-container">
+        <div class="header">
+            <div class="header-text">
+                <div class="corporation-name editable" contenteditable="true">HALTON CONDOMINIUM CORPORATION NO. XX</div>
+                <div class="document-title editable" contenteditable="true">Class 1/2/3 Comprehensive/Updated Reserve Fund Study</div>
+            </div>
+            <div class="logo-container">
+                <img id="logo" src="default-logo.png" alt="Company Logo">
+                <input type="file" id="logo-upload" style="display: none;">
+                <button onclick="document.getElementById('logo-upload').click()">Change Logo</button>
+            </div>
+        </div>
+
+        <div class="section-title">4.0 | <span>Common Interior Finishes</span></div>
+        
+        <div class="content-block editable" contenteditable="true">
+            It should be noted that the replacement of interior finishes is based upon factors other than observable deterioration or wear (eg: dated materials and/or dated style/design). The extent and the timing of the work may therefore vary from what is illustrated in the Component Inventory Life Cycle/Cost Table.
+        </div>
+
+        <div class="subsection-title">4.01 &nbsp;&nbsp;&nbsp;&nbsp; Entrance Lobby & Vestibule</div>
+        
+        <div class="content-block editable" contenteditable="true">
+            The entrance lobby and vestibule finishes include XXXX, XXXX, XXX.
+        </div>
+        
+        <div class="content-block editable" contenteditable="true">
+            Refurbishment/renovation of the main lobby and entrance vestibule finishes has been included in the Reserve Fund Study
+        </div>
+
+        <div class="subsection-title">4.02 &nbsp;&nbsp;&nbsp;&nbsp; Corridors</div>
+        
+        <div class="content-block editable" contenteditable="true">
+            The suite corridor finishes include XXXX, XXXX, XXX. The garbage chute rooms include XXXX, XXXX, XXX.
+        </div>
+        
+        <div class="content-block editable" contenteditable="true">
+            The Reserve Fund Study has allowed for the refurbishment of the residential corridors within the building.
+        </div>
+
+        <div class="subsection-title">4.03 &nbsp;&nbsp;&nbsp;&nbsp; Amenities</div>
+        
+        <div class="content-block editable" contenteditable="true">
+            The amenity space is located on the xxx floor and includes the following spaces:
+        </div>
+        
+        <ul class="amenities-list">
+            <li class="editable" contenteditable="true">XXXXX room: carpet flooring, painted walls and ceilings, and laminated cabinetry.</li>
+            <li class="editable" contenteditable="true">XXXXX room: carpet flooring, and painted walls and ceilings.</li>
+            <li class="editable" contenteditable="true">XXXXX room: ceramic tiled flooring, and painted walls and ceilings.</li>
+        </ul>
+        
+        <div class="content-block editable" contenteditable="true">
+            The Reserve Fund Study has included for the following:
+        </div>
+    </div>
+
+    <script>
+        // Script to handle logo upload
+        document.getElementById('logo-upload').addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    document.getElementById('logo').src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // Make all editable elements actually editable
+        document.querySelectorAll('.editable').forEach(element => {
+            element.addEventListener('focus', function() {
+                this.style.borderColor = '#aaa';
+            });
+            
+            element.addEventListener('blur', function() {
+                this.style.borderColor = 'transparent';
+            });
+        });
+    </script>
+</body>
+</html> 
