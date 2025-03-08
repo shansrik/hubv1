@@ -132,7 +132,7 @@ export default function DocumentEditor({
       try {
         setTimeout(() => {
           focusEditor(activeBlockId);
-        }, 50);
+        }, 100);
       } catch (err) {
         console.error("Error focusing editor:", err);
       }
@@ -216,7 +216,7 @@ export default function DocumentEditor({
       return;
     }
     
-    // Get the most up-to-date reference
+    // Get the most up-to-date reference with a longer delay to ensure DOM is ready
     setTimeout(() => {
       if (editorRefs.current[blockId]) {
         console.log("Found editor ref, focusing:", blockId);
@@ -224,8 +224,16 @@ export default function DocumentEditor({
       } else {
         console.warn("Editor ref not found for block:", blockId);
         console.log("Available editor refs:", Object.keys(editorRefs.current));
+        
+        // Try again with a longer delay if it failed the first time
+        setTimeout(() => {
+          if (editorRefs.current[blockId]) {
+            console.log("Found editor ref on second attempt, focusing:", blockId);
+            editorRefs.current[blockId]?.focus();
+          }
+        }, 100);
       }
-    }, 10);
+    }, 50);
   };
 
   // Handle editor state change for a block
@@ -712,7 +720,8 @@ export default function DocumentEditor({
             } ${
               block.aiAssisted ? 'bg-blue-50/30 hover:bg-blue-50/50' : ''
             }`}
-            onClick={() => {
+            onClick={(e) => {
+              e.preventDefault();
               updateActiveBlockId(block.id);
               focusEditor(block.id);
             }}
