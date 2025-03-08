@@ -33,7 +33,7 @@ import { useToast } from "@/components/ui/use-toast"
 import type { ReportSection } from "@/types/document"
 import { exportToPDF } from "@/lib/utils"
 import InlineEditor from "@/components/inline-editor"
-import DocumentEditor from "@/components/document-editor"
+import ProseMirrorEditor from "@/components/prosemirror-editor"
 import { Button } from "@/components/ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { useVirtualizer } from "@tanstack/react-virtual"
@@ -93,7 +93,6 @@ export default function UnifiedReportEditor() {
   
   // Custom pages state
   const [customPages, setCustomPages] = useState<CustomPage[]>([])
-  const [editingCustomPage, setEditingCustomPage] = useState<string | null>(null)
   
   // Photo insertion state
   const [reportPhotos, setReportPhotos] = useState<ReportPhoto[]>([])
@@ -127,50 +126,9 @@ export default function UnifiedReportEditor() {
     height: 40,
   }
 
-  // Add new state for editing main content
-  const [editingMainContent, setEditingMainContent] = useState(false)
+  // No need for edit mode toggle since content is always editable
   
-  // Formatting toolbar state
-  const [activeBlockId, setActiveBlockId] = useState<string | null>(null)
-  const [showFormat, setShowFormat] = useState<string | null>(null)
-  const [showAIMenu, setShowAIMenu] = useState<string | null>(null)
-  
-  // Store a reference to the document editor component
-  const documentEditorRef = useRef<any>(null)
-  
-  // Function to store the editor reference for direct control
-  const storeEditorMethodsRef = (methods: any) => {
-    console.log("Editor methods received:", methods)
-    
-    // Print all the methods for debugging
-    if (methods) {
-      console.log("Available methods:", Object.keys(methods))
-      
-      // Test one of the methods to make sure it's working
-      if (methods.getActiveBlockId) {
-        console.log("Current active block ID:", methods.getActiveBlockId())
-      }
-    }
-    
-    documentEditorRef.current = methods
-    
-    // Test method calls
-    setTimeout(() => {
-      try {
-        if (documentEditorRef.current && documentEditorRef.current.getActiveBlockId) {
-          const activeId = documentEditorRef.current.getActiveBlockId()
-          console.log("Active block after timeout:", activeId)
-          
-          if (activeId && documentEditorRef.current.changeBlockType) {
-            console.log("Testing changeBlockType on:", activeId)
-            documentEditorRef.current.changeBlockType(activeId, 'heading-one')
-          }
-        }
-      } catch (error) {
-        console.error("Error in test method call:", error)
-      }
-    }, 1000)
-  }
+  // No formatting toolbar state needed - ProseMirrorEditor handles this internally
 
   // Calculate number of pages based on content height
   useEffect(() => {
@@ -241,146 +199,29 @@ export default function UnifiedReportEditor() {
 
   // Save edited content
   const saveEditedContent = (html: string) => {
-    if (editingCustomPage) {
-      // Update custom page content
-      setCustomPages(prevPages => 
-        prevPages.map(page => 
-          page.id === editingCustomPage 
-            ? { ...page, content: html } 
-            : page
-        )
-      )
-      setEditingCustomPage(null)
-    } else {
-      // Save main content page
-      if (contentRef.current) {
-        contentRef.current.innerHTML = html
-      }
-      setEditingMainContent(false)
+    // Save main content page
+    if (contentRef.current) {
+      contentRef.current.innerHTML = html
     }
     
+    // Only show a toast notification on manual save, not for autosave
+    // This function is now only used for explicit save actions
     toast({
       title: "Content saved",
       description: "Your changes have been saved successfully."
     })
   }
 
-  // Cancel editing
+  // Cancel editing - only used for header editing now
   const cancelEditing = () => {
-    setEditingSection(null)
-    setEditingSubsection(null)
-    setEditingCustomPage(null)
     setEditingHeader(false)
     setIsInsertingPhoto(false)
     setEditingSectionTitle(null)
     setEditingSubsectionTitle(null)
     setTitleEditValue("")
-    setEditingMainContent(false)
-    setActiveBlockId(null)
-    setShowFormat(null)
-    setShowAIMenu(null)
   }
   
-  // Handle active block change
-  const handleActiveBlockChange = (blockId: string) => {
-    console.log("Active block changed to:", blockId)
-    setActiveBlockId(blockId)
-    
-    // Also try to focus the editor if possible
-    if (blockId && documentEditorRef.current?.focusEditor) {
-      documentEditorRef.current.focusEditor(blockId)
-    }
-  }
-  
-  // Handle format change
-  const handleFormatChange = (blockId: string, formatType: string) => {
-    const targetBlockId = blockId || getCurrentBlockId();
-    console.log("Format change requested:", targetBlockId, formatType)
-    console.log("Editor methods available:", !!documentEditorRef.current)
-    
-    if (!targetBlockId) {
-      console.error("No target block ID available for format change")
-      setShowFormat(null)
-      return
-    }
-    
-    if (documentEditorRef.current) {
-      console.log("Available methods:", Object.keys(documentEditorRef.current))
-    }
-    
-    if (documentEditorRef.current && typeof documentEditorRef.current.changeBlockType === 'function') {
-      console.log("Calling changeBlockType...")
-      try {
-        documentEditorRef.current.changeBlockType(targetBlockId, formatType)
-        console.log("Call successful")
-      } catch (error) {
-        console.error("Error calling changeBlockType:", error)
-      }
-    } else {
-      console.warn("changeBlockType method not available or not a function")
-    }
-    setShowFormat(null)
-  }
-  
-  // Helper function to get the current active block ID
-  const getCurrentBlockId = () => {
-    return activeBlockId || 
-      (documentEditorRef.current?.getActiveBlockId ? 
-        documentEditorRef.current.getActiveBlockId() : "");
-  }
-
-  // Handle style toggle
-  const handleStyleToggle = (blockId: string, style: string) => {
-    const targetBlockId = blockId || getCurrentBlockId();
-    console.log("Style toggle requested:", targetBlockId, style)
-    
-    if (!targetBlockId) {
-      console.error("No target block ID available for style toggle")
-      return
-    }
-    
-    if (documentEditorRef.current && typeof documentEditorRef.current.toggleInlineStyle === 'function') {
-      console.log("Calling toggleInlineStyle on block:", targetBlockId)
-      try {
-        documentEditorRef.current.toggleInlineStyle(targetBlockId, style)
-        console.log("Style toggle call successful")
-      } catch (error) {
-        console.error("Error calling toggleInlineStyle:", error)
-      }
-    } else {
-      console.warn("toggleInlineStyle method not available or not a function")
-    }
-  }
-  
-  // Handle AI enhancement
-  const handleAIEnhance = (promptType: string) => {
-    const targetBlockId = getCurrentBlockId();
-    console.log("AI enhance requested:", promptType, targetBlockId)
-    
-    if (!targetBlockId) {
-      console.error("No target block ID available for AI enhancement")
-      setShowAIMenu(null)
-      return
-    }
-    
-    if (documentEditorRef.current && typeof documentEditorRef.current.enhanceWithAI === 'function') {
-      console.log("Calling enhanceWithAI on block:", targetBlockId)
-      try {
-        documentEditorRef.current.enhanceWithAI(targetBlockId, promptType)
-        console.log("AI enhance call successful")
-      } catch (error) {
-        console.error("Error calling enhanceWithAI:", error)
-      }
-    } else {
-      console.warn("enhanceWithAI method not available or not a function")
-    }
-    setShowAIMenu(null)
-  }
-  
-  // Handle AI menu
-  const handleShowAIMenu = (blockId: string) => {
-    setShowAIMenu(blockId)
-  }
+  // No handler functions needed - ProseMirrorEditor handles this internally
   
   // Start editing section title
   const startEditingSectionTitle = (sectionId: string, currentTitle: string) => {
@@ -592,25 +433,7 @@ export default function UnifiedReportEditor() {
     )
   }
   
-  // Start editing a custom page
-  const startEditingCustomPage = (pageId: string) => {
-    // Clear any other editing state first
-    setEditingSection(null)
-    setEditingSubsection(null)
-    setEditingSectionTitle(null)
-    setEditingSubsectionTitle(null)
-    
-    // Set the custom page editing state
-    setEditingCustomPage(pageId)
-    
-    // Focus on the editor after a short delay
-    setTimeout(() => {
-      const editorElement = document.querySelector('.DraftEditor-root')
-      if (editorElement) {
-        editorElement.scrollIntoView({ behavior: 'smooth' })
-      }
-    }, 100)
-  }
+  // No longer needed since pages are always editable
   
   // Toggle header editing mode
   const toggleHeaderEditing = () => {
@@ -739,11 +562,10 @@ export default function UnifiedReportEditor() {
                           ...customPages,
                           {
                             id: newPageId,
-                            content: "", // Empty content - let the editor handle it
+                            content: "<p>Start typing...</p>", // Default content for new page
                             images: []
                           }
                         ])
-                        setTimeout(() => startEditingCustomPage(newPageId), 100)
                       }}
                       className="justify-start"
                     >
@@ -779,301 +601,7 @@ export default function UnifiedReportEditor() {
             </div>
           </div>
           
-          {/* Formatting toolbar - only shown when editing */}
-          {(editingMainContent || editingCustomPage) && (
-            <div className="formatting-toolbar p-2 border-t border-gray-200 bg-gray-50 flex items-center">
-              {/* Format menu */}
-              <Popover 
-                open={showFormat !== null} 
-                onOpenChange={(open) => {
-                  // Get current active block from editor methods if needed
-                  const currentActiveBlock = 
-                    activeBlockId || 
-                    (documentEditorRef.current?.getActiveBlockId ? 
-                      documentEditorRef.current.getActiveBlockId() : null);
-                      
-                  setShowFormat(open ? currentActiveBlock : null);
-                  
-                  // Debug
-                  console.log("Format menu", open ? "opened" : "closed", "active block:", currentActiveBlock);
-                }}
-              >
-                <PopoverTrigger asChild>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="h-7 px-2"
-                    disabled={!activeBlockId && !(documentEditorRef.current?.getActiveBlockId?.())}
-                  >
-                    <Type className="h-3.5 w-3.5 mr-1" />
-                    <span className="text-xs">Format</span>
-                    <ChevronDown className="h-3 w-3 ml-1" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-48 p-1">
-                  <div className="flex flex-col space-y-1">
-                    <Button 
-                      variant="ghost"
-                      size="sm"
-                      className="justify-start"
-                      onClick={() => {
-                        const currentBlockId = activeBlockId || 
-                          (documentEditorRef.current?.getActiveBlockId ? 
-                            documentEditorRef.current.getActiveBlockId() : "");
-                        handleFormatChange(currentBlockId, 'text');
-                      }}
-                    >
-                      <span className="text-sm">Text</span>
-                    </Button>
-                    <Button 
-                      variant="ghost"
-                      size="sm"
-                      className="justify-start"
-                      onClick={() => {
-                        const currentBlockId = activeBlockId || 
-                          (documentEditorRef.current?.getActiveBlockId ? 
-                            documentEditorRef.current.getActiveBlockId() : "");
-                        handleFormatChange(currentBlockId, 'heading-one');
-                      }}
-                    >
-                      <span className="text-lg font-bold">Heading 1</span>
-                    </Button>
-                    <Button 
-                      variant="ghost"
-                      size="sm"
-                      className="justify-start"
-                      onClick={() => handleFormatChange(activeBlockId || "", 'heading-two')}
-                    >
-                      <span className="text-md font-bold">Heading 2</span>
-                    </Button>
-                    <Button 
-                      variant="ghost"
-                      size="sm"
-                      className="justify-start"
-                      onClick={() => handleFormatChange(activeBlockId || "", 'heading-three')}
-                    >
-                      <span className="text-sm font-bold">Heading 3</span>
-                    </Button>
-                    <Button 
-                      variant="ghost"
-                      size="sm"
-                      className="justify-start"
-                      onClick={() => handleFormatChange(activeBlockId || "", 'unordered-list')}
-                    >
-                      <List className="h-4 w-4 mr-2" />
-                      <span>Bullet List</span>
-                    </Button>
-                    <Button 
-                      variant="ghost"
-                      size="sm"
-                      className="justify-start"
-                      onClick={() => handleFormatChange(activeBlockId || "", 'ordered-list')}
-                    >
-                      <span className="w-4 mr-2 text-center">1.</span>
-                      <span>Numbered List</span>
-                    </Button>
-                    <Button 
-                      variant="ghost"
-                      size="sm"
-                      className="justify-start"
-                      onClick={() => handleFormatChange(activeBlockId || "", 'code')}
-                    >
-                      <Code className="h-4 w-4 mr-2" />
-                      <span>Code Block</span>
-                    </Button>
-                    <Button 
-                      variant="ghost"
-                      size="sm"
-                      className="justify-start"
-                      onClick={() => handleFormatChange(activeBlockId || "", 'quote')}
-                    >
-                      <Quote className="h-4 w-4 mr-2" />
-                      <span>Quote Block</span>
-                    </Button>
-                  </div>
-                </PopoverContent>
-              </Popover>
-              
-              {/* Inline formatting buttons */}
-              <div className="border-l border-gray-200 mx-1 h-5"></div>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="h-7 w-7 p-0"
-                onClick={() => handleStyleToggle("", 'BOLD')}
-              >
-                <Bold className="h-3.5 w-3.5" />
-              </Button>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="h-7 w-7 p-0"
-                onClick={() => handleStyleToggle("", 'ITALIC')}
-              >
-                <Italic className="h-3.5 w-3.5" />
-              </Button>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="h-7 w-7 p-0"
-                onClick={() => handleStyleToggle("", 'UNDERLINE')}
-              >
-                <Underline className="h-3.5 w-3.5" />
-              </Button>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="h-7 w-7 p-0"
-                onClick={() => handleStyleToggle("", 'STRIKETHROUGH')}
-              >
-                <Strikethrough className="h-3.5 w-3.5" />
-              </Button>
-              
-              {/* Text alignment */}
-              <div className="border-l border-gray-200 mx-1 h-5"></div>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="h-7 w-7 p-0"
-                onClick={() => handleStyleToggle("", 'ALIGN_LEFT')}
-              >
-                <AlignLeft className="h-3.5 w-3.5" />
-              </Button>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="h-7 w-7 p-0"
-                onClick={() => handleStyleToggle("", 'ALIGN_CENTER')}
-              >
-                <AlignCenter className="h-3.5 w-3.5" />
-              </Button>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="h-7 w-7 p-0"
-                onClick={() => handleStyleToggle("", 'ALIGN_RIGHT')}
-              >
-                <AlignRight className="h-3.5 w-3.5" />
-              </Button>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="h-7 w-7 p-0"
-                onClick={() => handleStyleToggle("", 'ALIGN_JUSTIFY')}
-              >
-                <AlignJustify className="h-3.5 w-3.5" />
-              </Button>
-              
-              {/* AI assistance button */}
-              <div className="border-l border-gray-200 mx-1 h-5"></div>
-              <Popover 
-                open={showAIMenu !== null} 
-                onOpenChange={(open) => {
-                  // Get current active block from editor methods if needed
-                  const currentActiveBlock = 
-                    activeBlockId || 
-                    (documentEditorRef.current?.getActiveBlockId ? 
-                      documentEditorRef.current.getActiveBlockId() : null);
-                      
-                  setShowAIMenu(open ? currentActiveBlock : null);
-                  
-                  // Debug
-                  console.log("AI menu", open ? "opened" : "closed", "active block:", currentActiveBlock);
-                }}
-              >
-                <PopoverTrigger asChild>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="h-7 px-2 text-yellow-500 hover:text-yellow-600 hover:bg-yellow-50"
-                    disabled={!activeBlockId && !(documentEditorRef.current?.getActiveBlockId?.())}
-                  >
-                    <Sparkles className="h-3.5 w-3.5 mr-1" />
-                    <span className="text-xs">AI</span>
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-56 p-1">
-                  <div className="flex flex-col space-y-1">
-                    <Button 
-                      variant="ghost"
-                      size="sm"
-                      className="justify-start"
-                      onClick={() => handleAIEnhance('follow-up')}
-                    >
-                      <Sparkles className="h-3.5 w-3.5 mr-2 text-yellow-500" />
-                      <span>Add follow-up sentence</span>
-                    </Button>
-                    <Button 
-                      variant="ghost"
-                      size="sm"
-                      className="justify-start"
-                      onClick={() => handleAIEnhance('professional')}
-                    >
-                      <Sparkles className="h-3.5 w-3.5 mr-2 text-yellow-500" />
-                      <span>Rewrite professionally</span>
-                    </Button>
-                    <Button 
-                      variant="ghost"
-                      size="sm"
-                      className="justify-start"
-                      onClick={() => handleAIEnhance('casual')}
-                    >
-                      <Sparkles className="h-3.5 w-3.5 mr-2 text-yellow-500" />
-                      <span>Rewrite casually</span>
-                    </Button>
-                    <Button 
-                      variant="ghost"
-                      size="sm"
-                      className="justify-start"
-                      onClick={() => handleAIEnhance('concise')}
-                    >
-                      <Sparkles className="h-3.5 w-3.5 mr-2 text-yellow-500" />
-                      <span>Make concise</span>
-                    </Button>
-                    <Button 
-                      variant="ghost"
-                      size="sm"
-                      className="justify-start"
-                      onClick={() => handleAIEnhance('expand')}
-                    >
-                      <Sparkles className="h-3.5 w-3.5 mr-2 text-yellow-500" />
-                      <span>Expand with details</span>
-                    </Button>
-                    <Button 
-                      variant="ghost"
-                      size="sm"
-                      className="justify-start"
-                      onClick={() => handleAIEnhance('grammar')}
-                    >
-                      <Sparkles className="h-3.5 w-3.5 mr-2 text-yellow-500" />
-                      <span>Fix grammar & spelling</span>
-                    </Button>
-                  </div>
-                </PopoverContent>
-              </Popover>
-
-              {/* Save and cancel buttons on the right */}
-              <div className="ml-auto flex space-x-2">
-                <Button size="sm" variant="outline" onClick={cancelEditing}>
-                  <X className="h-4 w-4 mr-1" />
-                  Cancel
-                </Button>
-                <Button 
-                  size="sm"
-                  onClick={() => {
-                    if (contentRef.current?.querySelector('.DraftEditor-root')) {
-                      // Trigger save from the editor
-                      const saveEvent = new CustomEvent('save-content')
-                      contentRef.current.dispatchEvent(saveEvent)
-                    }
-                  }}
-                >
-                  <Save className="h-4 w-4 mr-1" />
-                  Save
-                </Button>
-              </div>
-            </div>
-          )}
+          {/* No formatting toolbar needed anymore - ProseMirrorEditor has its own */}
         </div>
         
         {/* Header editing panel (when active) */}
@@ -1192,59 +720,34 @@ export default function UnifiedReportEditor() {
                     <div 
                       className="absolute top-[2in] left-[1in] right-[1in] bottom-[1in] overflow-hidden"
                     >
-                      {/* Main content page */}
+                      {/* Main content page - Always show editor with autosave */}
                       {isMainContentPage && (
-                        <div ref={contentRef}>
-                          {editingMainContent ? (
-                            <DocumentEditor
-                              initialContent={contentRef.current?.innerHTML || ""}
-                              onSave={saveEditedContent}
-                              onCancel={cancelEditing}
-                              activeBlock={activeBlockId}
-                              onActiveBlockChange={handleActiveBlockChange}
-                              onFormatBlock={handleFormatChange}
-                              onToggleStyle={handleStyleToggle}
-                              onShowAIMenu={handleShowAIMenu}
-                              showToolbar={false}
-                              onRef={storeEditorMethodsRef}
-                            />
-                          ) : (
-                            <>
-                              <div 
-                                className="main-page-content prose max-w-none"
-                                dangerouslySetInnerHTML={{ __html: contentRef.current?.innerHTML || contentRef.current?.innerHTML === "" ? "<p>Click to edit this page content...</p>" : "" }}
-                                onClick={() => setEditingMainContent(true)}
-                                style={{ cursor: 'pointer' }}
-                              />
-                            </>
-                          )}
+                        <div ref={contentRef} className="cursor-text min-h-[300px]">
+                          <ProseMirrorEditor
+                            initialContent={contentRef.current?.innerHTML || "<p>Start typing...</p>"}
+                            onSave={saveEditedContent}
+                            onCancel={cancelEditing}
+                          />
                         </div>
                       )}
                       
-                      {/* Custom page content */}
+                      {/* Custom page content - Always show editor with autosave */}
                       {isCustomPage && (
-                        <div>
-                          {editingCustomPage === customPages[virtualRow.index - 1].id ? (
-                            <DocumentEditor
-                              initialContent={customPages[virtualRow.index - 1].content}
-                              onSave={saveEditedContent}
-                              onCancel={cancelEditing}
-                              activeBlock={activeBlockId}
-                              onActiveBlockChange={handleActiveBlockChange}
-                              onFormatBlock={handleFormatChange}
-                              onToggleStyle={handleStyleToggle}
-                              onShowAIMenu={handleShowAIMenu}
-                              showToolbar={false}
-                              onRef={storeEditorMethodsRef}
-                            />
-                          ) : (
-                            <div 
-                              className="custom-page-content"
-                              dangerouslySetInnerHTML={{ __html: customPages[virtualRow.index - 1].content }}
-                              onClick={() => startEditingCustomPage(customPages[virtualRow.index - 1].id)}
-                              style={{ cursor: 'pointer' }}
-                            />
-                          )}
+                        <div className="cursor-text min-h-[300px]">
+                          <ProseMirrorEditor
+                            initialContent={customPages[virtualRow.index - 1].content}
+                            onSave={(html) => {
+                              // Update custom page content
+                              setCustomPages(prevPages => 
+                                prevPages.map(page => 
+                                  page.id === customPages[virtualRow.index - 1].id 
+                                    ? { ...page, content: html } 
+                                    : page
+                                )
+                              )
+                            }}
+                            onCancel={() => {}} // Empty function since we've removed cancel functionality
+                          />
                           
                           {/* Custom page images */}
                           {customPages[virtualRow.index - 1].images.length > 0 && (

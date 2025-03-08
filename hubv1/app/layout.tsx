@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
-import "./globals.css";
-import '@/styles/document-editor.css'
+import "@/styles/globals.css";
+import "@/styles/document-editor.css";
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
@@ -15,8 +15,8 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "Block Document Editor",
-  description: "A block-style document editor with AI assistance",
+  title: "Notion-like Document Editor",
+  description: "A fluid, borderless document editor with autosave and AI assistance",
 };
 
 export default function RootLayout({
