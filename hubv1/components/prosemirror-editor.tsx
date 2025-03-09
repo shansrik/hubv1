@@ -28,6 +28,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { useToast } from "@/components/ui/use-toast"
+import { callClaudeAPI, createReferenceContext } from "@/lib/ai-service"
 
 interface ProseMirrorEditorProps {
   initialContent?: string
@@ -203,8 +204,8 @@ export default function ProseMirrorEditor({
     if (onCancel) onCancel()
   }, [onCancel])
   
-  // AI text enhancement
-  const enhanceWithAI = async (promptType: string) => {
+  // AI text enhancement with Claude
+  const enhanceWithAI = async (promptType: string, customPromptText?: string) => {
     if (!editor) return
     
     setIsGeneratingAI(true)
@@ -235,38 +236,84 @@ export default function ProseMirrorEditor({
         return
       }
       
-      let enhancedText = ''
+      // Load reference materials - in a real implementation, this would load from files
+      const referenceContext = `
+      # REFERENCE MATERIALS AND GUIDELINES
       
-      // Simulate different AI enhancements based on prompt type
-      // In a real implementation, this would call an AI API
-      switch (promptType) {
-        case 'follow-up':
-          enhancedText = `${text} Additionally, this approach offers several advantages including improved efficiency and scalability when dealing with complex systems.`
-          break
-        case 'professional':
-          enhancedText = `This document outlines the strategic approach to implementing the solution, highlighting key considerations and technical requirements. The methodology employed ensures optimal outcomes while mitigating potential risks.`
-          break
-        case 'casual':
-          enhancedText = `Hey there! Here's the deal: we're going to set this up in a super simple way. You'll find it's pretty straightforward and actually kind of fun to work with.`
-          break
-        case 'concise':
-          enhancedText = `Implementation requires three steps: analysis, development, and deployment. Each phase has distinct milestones and deliverables.`
-          break
-        case 'expand':
-          enhancedText = `${text} To elaborate further, this concept encompasses multiple dimensions including technical feasibility, resource allocation, timeline constraints, and stakeholder alignment. When properly implemented, the solution can dramatically improve operational efficiency while simultaneously reducing costs and enhancing user satisfaction.`
-          break
-        case 'grammar':
-          // Simple grammar fix simulation
-          enhancedText = text.replace(/\s+([,.!?])/g, '$1')
-                            .replace(/\bi\b/g, 'I')
-                            .replace(/dont/g, "don't")
-          break
-        default:
-          enhancedText = text
+      ## TERMINOLOGY
+      - Reserve Fund: A fund established by a condominium corporation to cover the cost of major repairs and replacement of common elements and assets of the corporation
+      - Reserve Fund Study: An analysis of a condominium corporation's reserve fund conducted by qualified professionals
+      - Class 1: A comprehensive reserve fund study based on a site inspection, destructive testing, and analysis of all components
+      - Common Elements: The portions of a condominium property that are not part of any unit and are shared by all owners
+      
+      ## STYLE GUIDELINES
+      - Use active voice for clarity
+      - Write in third person (avoid "I", "we", "you")
+      - Keep sentences concise (generally under 25 words)
+      - Use bullet points for lists of items
+      - Always use numerals for measurements, percentages, and dollar amounts
+      
+      ## TONE GUIDELINES
+      - Formal but accessible: Professional but not overly technical
+      - Factual: Evidence-based statements rather than opinions
+      - Solution-oriented: Focus on practical recommendations
+      `
+      
+      // Build system prompt with reference materials
+      const systemPrompt = `
+      You are an expert text editor who helps improve document text based on specific instructions.
+      Your task is to enhance the given text according to the specific request.
+      
+      ${referenceContext}
+      
+      Guidelines:
+      - Maintain the original meaning and key information
+      - Follow the style guidelines provided above
+      - Only make the requested changes
+      - Use proper grammar and punctuation
+      - Use terminology correctly as defined in the reference materials
+      - Be concise yet clear
+      - Return ONLY the enhanced text without any additional comments
+      `
+      
+      // Create user prompt based on enhancement type or custom prompt
+      let userPrompt = ''
+      let toastMessage = ''
+      
+      if (promptType === 'custom' && customPromptText) {
+        userPrompt = `${customPromptText}\n\nHere is the original text:\n"${text}"\n\nProvide your enhanced version:`
+        toastMessage = "Custom enhancement applied"
+      } else {
+        // Standard prompt types
+        switch (promptType) {
+          case 'follow-up':
+            userPrompt = `Add a compelling follow-up sentence to this text that expands on the main idea. Only output the new sentence:\n\n"${text}"`
+            toastMessage = "Follow-up sentence added"
+            break
+          case 'professional':
+            userPrompt = `Rewrite this text in a more professional, formal tone suitable for business communication. Only output the new sentence:\n\n"${text}"`
+            toastMessage = "Text rewritten in professional tone"
+            break
+          case 'concise':
+            userPrompt = `Make this text more concise while preserving the key information:\n\n"${text}"`
+            toastMessage = "Text made concise"
+            break
+          case 'expand':
+            userPrompt = `Expand this text with more details and explanation:\n\n"${text}"`
+            toastMessage = "Text expanded with details"
+            break
+          case 'grammar':
+            userPrompt = `Fix any grammar, spelling, or punctuation errors in this text without changing its meaning:\n\n"${text}"`
+            toastMessage = "Grammar corrected"
+            break
+          default:
+            userPrompt = `Improve this text:\n\n"${text}"`
+            toastMessage = "Text enhanced"
+        }
       }
       
-      // Simulate a 1-second delay for AI processing
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      // Call the Claude API with our formatted prompts
+      const enhancedText = await enhanceTextWithClaude(systemPrompt, userPrompt, text)
       
       // Replace the selected text with the enhanced text
       if (isSelection) {
@@ -288,19 +335,66 @@ export default function ProseMirrorEditor({
       }
       
       toast({
-        title: "AI Enhancement Applied",
-        description: `Text ${promptType === 'grammar' ? 'corrected' : 'enhanced'} using AI.`,
+        title: "Claude Enhancement Applied",
+        description: toastMessage,
         duration: 3000
       })
     } catch (error) {
       console.error("Error enhancing text:", error)
       toast({
         title: "Enhancement failed",
-        description: "There was an error enhancing your text.",
+        description: "There was an error enhancing your text with Claude.",
         variant: "destructive"
       })
     } finally {
       setIsGeneratingAI(false)
+    }
+  }
+  
+  // Use the API route to call Claude
+  const enhanceTextWithClaude = async (systemPrompt: string, userPrompt: string, originalText: string): Promise<string> => {
+    try {
+      console.log("Calling Claude API via API route with prompt:", userPrompt.substring(0, 50) + "...");
+      
+      // Call our API route that handles Claude API requests
+      const response = await fetch('/api/claude', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          systemPrompt,
+          userPrompt,
+        }),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: "Unknown error" }));
+        console.error("API route error:", errorData);
+        throw new Error(`API error: ${response.status} - ${errorData.error || "Unknown error"}`);
+      }
+      
+      const data = await response.json();
+      
+      if (!data.content) {
+        console.error("Missing content in API response:", data);
+        throw new Error("Invalid API response format");
+      }
+      
+      console.log("API response received, length:", data.content.length);
+      return data.content;
+    } catch (error) {
+      console.error("Error enhancing text with Claude:", error);
+      
+      // Provide a helpful fallback that tells the user what happened
+      toast({
+        title: "AI Enhancement Error",
+        description: "There was an error connecting to the AI service. Please try again.",
+        variant: "destructive",
+        duration: 5000
+      });
+      
+      return originalText; // Return original text if there's an error
     }
   }
   
@@ -364,12 +458,14 @@ export default function ProseMirrorEditor({
     const handleDocumentClick = (e: MouseEvent) => {
       // Don't hide menus when clicking inside menu containers
       if ((e.target as Element)?.closest('.format-menu-container') || 
-          (e.target as Element)?.closest('.format-menu-dropdown')) {
+          (e.target as Element)?.closest('.format-menu-dropdown') ||
+          (e.target as Element)?.closest('.ai-menu-container') ||
+          (e.target as Element)?.closest('.ai-menu-dropdown')) {
         return;
       }
       
-      // Hide all format menus
-      document.querySelectorAll('.format-menu-dropdown').forEach(el => {
+      // Hide all menus
+      document.querySelectorAll('.format-menu-dropdown, .ai-menu-dropdown').forEach(el => {
         el.classList.add('hidden');
       });
     };
@@ -602,46 +698,155 @@ export default function ProseMirrorEditor({
               <div className="mx-0.5 h-4 border-l border-gray-300"></div>
               
               {/* AI Quick Actions */}
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button 
-                    size="sm" 
-                    variant="ghost" 
-                    className="h-7 px-1 text-yellow-500"
-                  >
-                    <Sparkles className="h-3.5 w-3.5 mr-1" />
-                    <span className="text-xs">AI</span>
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-48 p-1">
-                  <div className="flex flex-col space-y-1">
-                    <Button 
-                      variant="ghost"
-                      size="sm"
-                      className="justify-start text-xs"
-                      onClick={() => enhanceWithAI('expand')}
-                    >
-                      Expand with AI
-                    </Button>
-                    <Button 
-                      variant="ghost"
-                      size="sm"
-                      className="justify-start text-xs"
-                      onClick={() => enhanceWithAI('concise')}
-                    >
-                      Make concise
-                    </Button>
-                    <Button 
-                      variant="ghost"
-                      size="sm"
-                      className="justify-start text-xs"
-                      onClick={() => enhanceWithAI('grammar')}
-                    >
-                      Fix grammar
-                    </Button>
-                  </div>
-                </PopoverContent>
-              </Popover>
+{/* Custom AI menu that won't disappear */}
+              <div className="ai-menu-container">
+                <Button 
+                  size="sm" 
+                  variant="ghost" 
+                  className="h-7 px-1 text-yellow-500"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    // Create a unique ID for this editor's AI menu
+                    const editorId = editor.options.element.getAttribute('data-editor-id') || 
+                                    Math.random().toString(36).substring(2, 9);
+                    
+                    // Find or create menu
+                    let menu = document.getElementById(`ai-menu-${editorId}`);
+                    
+                    if (!menu) {
+                      // Create menu if it doesn't exist
+                      menu = document.createElement('div');
+                      menu.id = `ai-menu-${editorId}`;
+                      menu.className = "absolute right-0 top-8 bg-white rounded-md shadow-lg border border-gray-200 p-2 z-50 ai-menu-dropdown";
+                      menu.style.minWidth = "200px";
+                      
+                      // Create the menu items
+                      const menuContent = document.createElement('div');
+                      menuContent.className = "flex flex-col space-y-2";
+                      
+                      // Add standard AI options
+                      const standardOptions = [
+                        { label: "Expand text", action: "expand" },
+                        { label: "Make text concise", action: "concise" },
+                        { label: "Fix grammar", action: "grammar" },
+                        { label: "Professional tone", action: "professional" },
+                      ];
+                      
+                      standardOptions.forEach(option => {
+                        const button = document.createElement('button');
+                        button.className = "text-left px-2 py-1 hover:bg-gray-100 rounded text-sm";
+                        button.innerText = option.label;
+                        button.setAttribute('data-action', option.action);
+                        menuContent.appendChild(button);
+                      });
+                      
+                      // Add divider
+                      const divider = document.createElement('div');
+                      divider.className = "border-t border-gray-200 my-1";
+                      menuContent.appendChild(divider);
+                      
+                      // Add custom prompt input
+                      const customPromptContainer = document.createElement('div');
+                      customPromptContainer.className = "mt-2";
+                      
+                      const customPromptLabel = document.createElement('label');
+                      customPromptLabel.className = "block text-xs text-gray-500 mb-1";
+                      customPromptLabel.innerText = "Custom instruction:";
+                      
+                      const customPromptInput = document.createElement('input');
+                      customPromptInput.className = "w-full p-1 text-sm border border-gray-300 rounded";
+                      customPromptInput.placeholder = "E.g., Rewrite for 5th grade level";
+                      customPromptInput.id = `custom-prompt-${editorId}`;
+                      
+                      const customPromptButton = document.createElement('button');
+                      customPromptButton.className = "mt-1 w-full bg-yellow-500 hover:bg-yellow-600 text-white px-2 py-1 rounded text-sm";
+                      customPromptButton.innerText = "Apply Custom Prompt";
+                      customPromptButton.setAttribute('data-action', 'custom');
+                      
+                      customPromptContainer.appendChild(customPromptLabel);
+                      customPromptContainer.appendChild(customPromptInput);
+                      customPromptContainer.appendChild(customPromptButton);
+                      menuContent.appendChild(customPromptContainer);
+                      
+                      // Add button listeners - but NOT on the input field
+                      menuContent.querySelectorAll('button').forEach(button => {
+                        button.addEventListener('mousedown', (menuEvent) => {
+                          menuEvent.preventDefault();
+                          menuEvent.stopPropagation();
+                          
+                          const action = button.getAttribute('data-action');
+                          
+                          if (action === 'custom') {
+                            const customInput = document.getElementById(`custom-prompt-${editorId}`) as HTMLInputElement;
+                            const customPrompt = customInput?.value;
+                            if (customPrompt && customPrompt.trim()) {
+                              enhanceWithAI('custom', customPrompt);
+                            }
+                          } else if (action) {
+                            enhanceWithAI(action);
+                          }
+                          
+                          // Hide menu
+                          menu!.classList.add('hidden');
+                        });
+                      });
+                      
+                      // Special handling for the input field
+                      const inputField = document.getElementById(`custom-prompt-${editorId}`);
+                      if (inputField) {
+                        // Prevent blur when clicking in the input
+                        inputField.addEventListener('mousedown', (e) => {
+                          e.stopPropagation();
+                        });
+                        
+                        // Allow typing in the input field
+                        inputField.addEventListener('click', (e) => {
+                          e.stopPropagation();
+                        });
+                        
+                        // Handle enter key in the input field
+                        inputField.addEventListener('keydown', (e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            const customPrompt = (inputField as HTMLInputElement).value;
+                            if (customPrompt && customPrompt.trim()) {
+                              enhanceWithAI('custom', customPrompt);
+                              menu!.classList.add('hidden');
+                            }
+                          }
+                        });
+                      }
+                      
+                      menu.appendChild(menuContent);
+                      document.body.appendChild(menu);
+                    }
+                    
+                    // Position the menu relative to the button
+                    const buttonRect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                    menu.style.position = 'fixed';
+                    menu.style.top = `${buttonRect.bottom + 5}px`;
+                    menu.style.left = `${buttonRect.left}px`;
+                    
+                    // Toggle visibility
+                    const isHidden = menu.classList.contains('hidden');
+                    
+                    // Hide all other menus
+                    document.querySelectorAll('.ai-menu-dropdown').forEach(el => {
+                      el.classList.add('hidden');
+                    });
+                    
+                    // Show this menu if it was hidden
+                    if (isHidden) {
+                      menu.classList.remove('hidden');
+                    }
+                  }}
+                >
+                  <Sparkles className="h-3.5 w-3.5 mr-1" />
+                  <span className="text-xs">AI</span>
+                </Button>
+              </div>
             </div>
           </BubbleMenu>
         )}
@@ -790,16 +995,6 @@ export default function ProseMirrorEditor({
                       >
                         <Sparkles className="h-3.5 w-3.5 mr-2 text-yellow-500" />
                         <span>Rewrite professionally</span>
-                      </Button>
-                      <Button 
-                        variant="ghost"
-                        size="sm"
-                        className="justify-start"
-                        onClick={() => enhanceWithAI('casual')}
-                        disabled={isGeneratingAI}
-                      >
-                        <Sparkles className="h-3.5 w-3.5 mr-2 text-yellow-500" />
-                        <span>Rewrite casually</span>
                       </Button>
                       <Button 
                         variant="ghost"

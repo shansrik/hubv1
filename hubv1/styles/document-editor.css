@@ -94,3 +94,43 @@
   position: relative;
   z-index: 1;
 }
+
+/* AI Menu styling */
+.ai-menu-dropdown {
+  z-index: 9999 !important;
+  position: fixed;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.ai-menu-container {
+  position: relative;
+  z-index: 99;
+}
+
+/* AI menu buttons */
+.ai-menu-dropdown button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  transition: background-color 0.2s;
+}
+
+/* AI menu input field */
+.ai-menu-dropdown input {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+
+.ai-menu-dropdown input:focus {
+  outline: 2px solid #3b82f6;
+  outline-offset: 1px;
+}
+
+/* Ensure AI menu stays above other elements */
+body .ai-menu-dropdown {
+  z-index: 10000;
+}

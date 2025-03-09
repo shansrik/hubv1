@@ -54,7 +54,7 @@ const MARGIN_PX = 1 * DPI // 1 inch margins
 
 // Sample photo URLs (in a real app these would come from an API)
 const SAMPLE_PHOTOS = [
-  "https://images.unsplash.com/photo-1497366754035-f200968a6e72?w=800&h=600&fit=crop",
+  "/images/IMG_2642.JPG",
   "https://images.unsplash.com/photo-1497366811353-6870744d04b2?w=800&h=600&fit=crop",
   "https://images.unsplash.com/photo-1524758631624-e2822e304c36?w=800&h=600&fit=crop",
 ]
