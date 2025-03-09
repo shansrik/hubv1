@@ -91,8 +91,15 @@ export default function UnifiedReportEditor() {
   const [editingSubsectionTitle, setEditingSubsectionTitle] = useState<string | null>(null)
   const [titleEditValue, setTitleEditValue] = useState("")
   
-  // Custom pages state
-  const [customPages, setCustomPages] = useState<CustomPage[]>([])
+  // Custom pages state - initialize with a default first page
+  const [customPages, setCustomPages] = useState<CustomPage[]>(() => {
+    // Start with one default page
+    return [{
+      id: `custom-page-${Date.now()}`,
+      content: "<p>Start typing...</p>",
+      images: []
+    }];
+  })
   
   // Photo insertion state
   const [reportPhotos, setReportPhotos] = useState<ReportPhoto[]>([])
@@ -126,21 +133,12 @@ export default function UnifiedReportEditor() {
     height: 40,
   }
 
-  // No need for edit mode toggle since content is always editable
-  
-  // No formatting toolbar state needed - ProseMirrorEditor handles this internally
-
   // Calculate number of pages based on content height
   useEffect(() => {
     const calculatePages = () => {
-      if (!contentRef.current) return
-      
-      const contentHeight = contentRef.current.scrollHeight
-      const contentPerPage = PAGE_HEIGHT_PX - (2 * MARGIN_PX) - 120 // 120px for header/footer
-      
-      // Only consider content page (page 1) and explicit custom pages
-      // Do not automatically add a third page based on content height
-      let pageCount = 1 + customPages.length
+      // Only consider custom pages - no main content page
+      // Using custom pages exclusively for better editability
+      let pageCount = customPages.length
       
       setTotalPages(Math.max(1, pageCount))
     }
@@ -153,31 +151,63 @@ export default function UnifiedReportEditor() {
     return () => {
       window.removeEventListener('resize', calculatePages)
     }
-  }, [sections, customPages])
+  }, [customPages])
   
-  // Track current page based on scroll position
+  // Track page changes based on visible elements
   useEffect(() => {
-    const handleScroll = () => {
-      if (!reportContainerRef.current) return
+    // This is needed for the scroll position to stabilize
+    const updatePageFromScroll = () => {
+      if (!reportContainerRef.current) return;
       
-      const { scrollTop } = reportContainerRef.current
-      const pageHeight = PAGE_HEIGHT_PX + 40 // Adding some margin between pages
-      const currentPageCalc = Math.floor(scrollTop / pageHeight) + 1
+      const scrollElement = reportContainerRef.current;
+      const { scrollTop, clientHeight } = scrollElement;
       
-      setCurrentPage(currentPageCalc)
-    }
+      // Get the middle point of the viewport
+      const viewportMidpoint = scrollTop + (clientHeight / 2);
+      
+      // Calculate which page is most visible
+      const pageHeight = PAGE_HEIGHT_PX + 40;
+      const visiblePageNumber = Math.ceil(viewportMidpoint / pageHeight);
+      
+      // Only update if different from current page
+      if (visiblePageNumber !== currentPage && visiblePageNumber > 0) {
+        setCurrentPage(visiblePageNumber);
+      }
+    };
     
-    const container = reportContainerRef.current
+    const container = reportContainerRef.current;
     if (container) {
-      container.addEventListener('scroll', handleScroll)
+      // Use passive true for better scroll performance
+      container.addEventListener('scroll', updatePageFromScroll, { passive: true });
     }
     
     return () => {
       if (container) {
-        container.removeEventListener('scroll', handleScroll)
+        container.removeEventListener('scroll', updatePageFromScroll);
       }
-    }
-  }, [])
+    };
+  }, [currentPage]);
+  
+  // Handle clicks on the container to prevent unwanted navigation
+  useEffect(() => {
+    // This is critical to fix the page 1-2 auto-scroll issue
+    const container = reportContainerRef.current;
+    if (!container) return;
+    
+    const handleClickOutside = (e: MouseEvent) => {
+      // Only handle clicks directly on the container background
+      if (e.target === container) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+    
+    container.addEventListener('click', handleClickOutside);
+    
+    return () => {
+      container.removeEventListener('click', handleClickOutside);
+    };
+  }, []);
 
   // Generate virtual pages for performance
   const rowVirtualizer = useVirtualizer({
@@ -191,38 +221,22 @@ export default function UnifiedReportEditor() {
     }
   })
 
-  // Start editing a section or subsection
-  const startEditing = (sectionId: string, subsectionId?: string) => {
-    setEditingSection(sectionId)
-    setEditingSubsection(subsectionId || null)
-  }
-
-  // Save edited content
-  const saveEditedContent = (html: string) => {
-    // Save main content page
-    if (contentRef.current) {
-      contentRef.current.innerHTML = html
-    }
+  // Autosave function - kept for compatibility but not used for main content anymore
+  // since we've moved to using custom pages exclusively
+  const autosaveContent = (html: string) => {
+    // This function is no longer relevant since we don't use the main content page
+    console.log("Legacy autosave called - not needed anymore");
     
-    // Only show a toast notification on manual save, not for autosave
-    // This function is now only used for explicit save actions
+    // Show toast for compatibility
     toast({
-      title: "Content saved",
-      description: "Your changes have been saved successfully."
-    })
-  }
+      title: "Autosaved",
+      description: "Your changes have been saved automatically."
+    });
+  };
+  
+  // We don't need the content change effect anymore since we're using custom pages
+  // with their own save handlers
 
-  // Cancel editing - only used for header editing now
-  const cancelEditing = () => {
-    setEditingHeader(false)
-    setIsInsertingPhoto(false)
-    setEditingSectionTitle(null)
-    setEditingSubsectionTitle(null)
-    setTitleEditValue("")
-  }
-  
-  // No handler functions needed - ProseMirrorEditor handles this internally
-  
   // Start editing section title
   const startEditingSectionTitle = (sectionId: string, currentTitle: string) => {
     setEditingSectionTitle(sectionId)
@@ -305,6 +319,7 @@ export default function UnifiedReportEditor() {
   const addNewPage = () => {
     const newPageId = `custom-page-${Date.now()}`
     
+    // Simple state update with the new page
     setCustomPages([
       ...customPages,
       {
@@ -312,22 +327,46 @@ export default function UnifiedReportEditor() {
         content: "<p>Click to edit this page content...</p>",
         images: []
       }
-    ])
+    ]);
+    
+    // Get the index of the new page
+    const newPageIndex = customPages.length;
+    
+    // Scroll to the new page after a short delay to allow for rendering
+    setTimeout(() => {
+      if (reportContainerRef.current) {
+        const pageHeight = PAGE_HEIGHT_PX + 40;
+        reportContainerRef.current.scrollTo({
+          top: newPageIndex * pageHeight,
+          behavior: 'smooth'
+        });
+      }
+    }, 100);
     
     toast({
       title: "Page Added",
       description: "A new page has been added to your report."
-    })
+    });
   }
   
   // Delete a custom page
   const deletePage = (pageId: string) => {
-    setCustomPages(customPages.filter(page => page.id !== pageId))
+    // Don't allow deleting if there's only one page
+    if (customPages.length <= 1) {
+      toast({
+        title: "Cannot Delete",
+        description: "You must have at least one page in your report.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    setCustomPages(customPages.filter(page => page.id !== pageId));
     
     toast({
       title: "Page Deleted",
       description: "The page has been removed from your report."
-    })
+    });
   }
   
   // Start photo insertion mode
@@ -433,8 +472,6 @@ export default function UnifiedReportEditor() {
     )
   }
   
-  // No longer needed since pages are always editable
-  
   // Toggle header editing mode
   const toggleHeaderEditing = () => {
     setEditingHeader(!editingHeader)
@@ -535,45 +572,14 @@ export default function UnifiedReportEditor() {
               Page {currentPage} of {totalPages}
             </div>
             <div className="flex items-center space-x-2">
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button 
-                    size="sm" 
-                    variant="outline"
-                  >
-                    <Plus className="h-4 w-4 mr-1" />
-                    Add
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-48 p-0">
-                  <div className="flex flex-col">
-                    <Button 
-                      variant="ghost"
-                      onClick={addNewPage} 
-                      className="justify-start"
-                    >
-                      <span>Add Blank Page</span>
-                    </Button>
-                    <Button 
-                      variant="ghost"
-                      onClick={() => {
-                        const newPageId = `custom-page-${Date.now()}`
-                        setCustomPages([
-                          ...customPages,
-                          {
-                            id: newPageId,
-                            content: "<p>Start typing...</p>", // Default content for new page
-                            images: []
-                          }
-                        ])
-                      }}
-                      className="justify-start"
-                    >
-                      <span>Add New Page</span>
-                    </Button>
-                  </div>
-                </PopoverContent>
-              </Popover>
+              <Button 
+                size="sm" 
+                variant="outline"
+                onClick={addNewPage}
+              >
+                <Plus className="h-4 w-4 mr-1" />
+                Add Page
+              </Button>
               
               <Button 
                 size="sm"
@@ -643,7 +649,7 @@ export default function UnifiedReportEditor() {
               </div>
             </div>
             <div className="flex justify-end space-x-2">
-              <Button size="sm" variant="outline" onClick={cancelEditing}>Cancel</Button>
+              <Button size="sm" variant="outline" onClick={() => setEditingHeader(false)}>Cancel</Button>
               <Button size="sm" onClick={saveHeaderChanges}>Save Changes</Button>
             </div>
           </div>
@@ -652,7 +658,7 @@ export default function UnifiedReportEditor() {
         {/* Technical Report with virtualized pages */}
         <div 
           ref={reportContainerRef}
-          className="flex-1 overflow-y-auto"
+          className="flex-1 overflow-y-auto page-scroller"
           style={{
             width: '100%',
             height: '100%',
@@ -668,9 +674,10 @@ export default function UnifiedReportEditor() {
             }}
           >
             {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-              // Determine if this is a report content page or a custom page
-              const isMainContentPage = virtualRow.index === 0
-              const isCustomPage = virtualRow.index > 0 && (virtualRow.index - 1) < customPages.length
+              // All pages are custom pages now - no main content page
+              const isCustomPage = virtualRow.index < customPages.length
+              const isMainContentPage = false // No main content page
+              const pageNumber = virtualRow.index + 1
               
               return (
                 <div
@@ -684,6 +691,9 @@ export default function UnifiedReportEditor() {
                     height: `${PAGE_HEIGHT_PX}px`,
                     transform: `translateY(${virtualRow.start}px)`,
                   }}
+                  data-page-number={pageNumber}
+                  className="page-container"
+                  id={`page-${pageNumber}`}
                 >
                   {/* Page container with white background and shadow */}
                   <div 
@@ -722,37 +732,41 @@ export default function UnifiedReportEditor() {
                     >
                       {/* Main content page - Always show editor with autosave */}
                       {isMainContentPage && (
-                        <div ref={contentRef} className="cursor-text min-h-[300px]">
+                        <div ref={contentRef} className="cursor-text min-h-[300px] always-editable-wrapper">
                           <ProseMirrorEditor
                             initialContent={contentRef.current?.innerHTML || "<p>Start typing...</p>"}
-                            onSave={saveEditedContent}
-                            onCancel={cancelEditing}
+                            onSave={autosaveContent}
+                            alwaysEditable={true}
                           />
                         </div>
                       )}
                       
                       {/* Custom page content - Always show editor with autosave */}
                       {isCustomPage && (
-                        <div className="cursor-text min-h-[300px]">
+                        <div className="cursor-text min-h-[300px] always-editable-wrapper">
                           <ProseMirrorEditor
-                            initialContent={customPages[virtualRow.index - 1].content}
+                            initialContent={customPages[virtualRow.index].content}
                             onSave={(html) => {
-                              // Update custom page content
-                              setCustomPages(prevPages => 
-                                prevPages.map(page => 
-                                  page.id === customPages[virtualRow.index - 1].id 
-                                    ? { ...page, content: html } 
-                                    : page
+                              // Update custom page content safely
+                              try {
+                                setCustomPages(prevPages => 
+                                  prevPages.map(page => 
+                                    page.id === customPages[virtualRow.index].id 
+                                      ? { ...page, content: html } 
+                                      : page
+                                  )
                                 )
-                              )
+                              } catch (error) {
+                                console.error("Error updating custom page:", error);
+                              }
                             }}
-                            onCancel={() => {}} // Empty function since we've removed cancel functionality
+                            alwaysEditable={true}
                           />
                           
                           {/* Custom page images */}
-                          {customPages[virtualRow.index - 1].images.length > 0 && (
+                          {customPages[virtualRow.index].images.length > 0 && (
                             <div className="mt-4 grid grid-cols-2 gap-4">
-                              {customPages[virtualRow.index - 1].images.map(image => (
+                              {customPages[virtualRow.index].images.map(image => (
                                 <div key={image.id} className="relative">
                                   <img 
                                     src={image.url} 
@@ -761,7 +775,7 @@ export default function UnifiedReportEditor() {
                                   />
                                   <button
                                     className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1"
-                                    onClick={() => removePhotoFromCustomPage(customPages[virtualRow.index - 1].id, image.id)}
+                                    onClick={() => removePhotoFromCustomPage(customPages[virtualRow.index].id, image.id)}
                                   >
                                     <X className="h-4 w-4" />
                                   </button>

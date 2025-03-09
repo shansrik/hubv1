@@ -1,22 +1,8 @@
 "use client"
 
-import { useState, useRef, useEffect } from "react"
-import { 
-  Editor, 
-  EditorState, 
-  RichUtils, 
-  ContentState, 
-  convertFromHTML,
-  convertToRaw,
-  CompositeDecorator,
-  getDefaultKeyBinding,
-  KeyBindingUtil,
-  SelectionState,
-  Modifier,
-  ContentBlock,
-  genKey
-} from 'draft-js'
-import 'draft-js/dist/Draft.css'
+import { useState, useRef, useEffect, useCallback } from "react"
+// Remove Draft.js dependencies - we'll use contenteditable instead
+import { genKey } from 'draft-js' // Just keeping this for unique IDs
 import { 
   Bold, 
   Italic, 
@@ -45,8 +31,8 @@ import { useToast } from "@/components/ui/use-toast"
 
 interface DocumentEditorProps {
   initialContent?: string;
-  onSave?: (content: string) => void;
-  onCancel?: () => void;
+  onSave?: (content: string) => void; // Used for autosave
+  onCancel?: () => void; // Kept for backward compatibility
   activeBlock?: string | null;
   onActiveBlockChange?: (blockId: string) => void;
   onAddBlock?: (blockId: string) => void;
@@ -60,12 +46,12 @@ interface DocumentEditorProps {
 
 interface EditorBlock {
   id: string;
-  content: EditorState;
+  content: string; // HTML content as string
   type: 'text' | 'heading-one' | 'heading-two' | 'heading-three' | 'unordered-list' | 'ordered-list' | 'code' | 'quote';
   aiAssisted?: boolean;
 }
 
-const emptyBlockContent = () => EditorState.createEmpty();
+const emptyBlockContent = () => "<p>Start typing...</p>";
 
 export default function DocumentEditor({ 
   initialContent = "<p>Start typing...</p>", 
@@ -81,31 +67,21 @@ export default function DocumentEditor({
   showToolbar = false,
   onRef
 }: DocumentEditorProps) {
+  // Always-editable document - no explicit save/edit cycle
   
   // Blocks state
   const [blocks, setBlocks] = useState<EditorBlock[]>(() => {
     try {
-      // For now, initialize with a single empty block
-      // In a production app, we would parse initialContent into blocks
+      // Initialize with a single block containing the initialContent
       return [
         {
           id: genKey(),
-          content: (() => {
-            const blocksFromHTML = convertFromHTML(initialContent);
-            if (blocksFromHTML.contentBlocks.length === 0) {
-              return emptyBlockContent();
-            }
-            const contentState = ContentState.createFromBlockArray(
-              blocksFromHTML.contentBlocks,
-              blocksFromHTML.entityMap
-            );
-            return EditorState.createWithContent(contentState);
-          })(),
+          content: initialContent || emptyBlockContent(),
           type: 'text'
         }
       ];
     } catch (error) {
-      console.error("Error parsing HTML:", error);
+      console.error("Error initializing content:", error);
       return [
         {
           id: genKey(),
@@ -130,14 +106,19 @@ export default function DocumentEditor({
     // Make sure the active block is focused
     if (activeBlockId) {
       try {
+        // We need to track if this was triggered programmatically or by user interaction
+        // When switching blocks via UI, we want to preserve selection
+        const wasTriggeredByUserInteraction = document.activeElement?.tagName === 'DIV';
+        
         setTimeout(() => {
-          focusEditor(activeBlockId);
-        }, 100);
+          // If this is from clicking on an element directly, don't change selection
+          focusEditor(activeBlockId, wasTriggeredByUserInteraction);
+        }, 50);
       } catch (err) {
         console.error("Error focusing editor:", err);
       }
     }
-  }, [activeBlockId]);
+  }, [activeBlockId, focusEditor]);
   
   // Create a ref object to expose methods
   const editorMethodsRef = useRef<any>({});
@@ -149,12 +130,12 @@ export default function DocumentEditor({
   const methodsRef = useRef<any>(null);
   
   // Custom setter that also calls the callback
-  const updateActiveBlockId = (blockId: string | null) => {
+  const updateActiveBlockId = useCallback((blockId: string | null) => {
     setActiveBlockId(blockId);
     if (blockId && onActiveBlockChange) {
       onActiveBlockChange(blockId);
     }
-  };
+  }, [onActiveBlockChange]);
   
   // Sync with external active block ID if provided
   useEffect(() => {
@@ -205,101 +186,196 @@ export default function DocumentEditor({
   
   // References
   const blockRefs = useRef<{[key: string]: HTMLDivElement | null}>({});
-  const editorRefs = useRef<{[key: string]: Editor | null}>({});
+  const contentEditableRefs = useRef<{[key: string]: HTMLDivElement | null}>({});
   
-  // Focus a specific block's editor
-  const focusEditor = (blockId: string) => {
-    console.log("Attempting to focus editor for block:", blockId);
+  // Focus a specific block's contentEditable div
+  const focusEditor = useCallback((blockId: string, preserveSelection = false) => {
+    console.log("Attempting to focus contentEditable for block:", blockId);
     
     if (!blockId) {
       console.warn("No block ID provided for focus");
       return;
     }
     
-    // Get the most up-to-date reference with a longer delay to ensure DOM is ready
+    // Use setTimeout to ensure DOM is ready
     setTimeout(() => {
-      if (editorRefs.current[blockId]) {
-        console.log("Found editor ref, focusing:", blockId);
-        editorRefs.current[blockId]?.focus();
-      } else {
-        console.warn("Editor ref not found for block:", blockId);
-        console.log("Available editor refs:", Object.keys(editorRefs.current));
+      const contentEditableEl = contentEditableRefs.current[blockId];
+      if (contentEditableEl) {
+        console.log("Found contentEditable ref, focusing:", blockId);
         
-        // Try again with a longer delay if it failed the first time
+        // Remember current selection if needed (when clicking between elements)
+        let savedRange = null;
+        if (preserveSelection) {
+          const selection = window.getSelection();
+          if (selection && selection.rangeCount > 0) {
+            savedRange = selection.getRangeAt(0).cloneRange();
+          }
+        }
+        
+        // Focus the element
+        contentEditableEl.focus();
+        
+        if (preserveSelection && savedRange) {
+          // Restore saved selection
+          const selection = window.getSelection();
+          if (selection) {
+            selection.removeAllRanges();
+            selection.addRange(savedRange);
+          }
+        } else {
+          // Place cursor at the end of the content (default behavior)
+          const selection = window.getSelection();
+          const range = document.createRange();
+          
+          // Try to select at the end of the content
+          try {
+            if (contentEditableEl.childNodes.length > 0) {
+              const lastChild = contentEditableEl.lastChild;
+              if (lastChild) {
+                range.selectNodeContents(lastChild);
+                range.collapse(false); // collapse to end
+                selection?.removeAllRanges();
+                selection?.addRange(range);
+              }
+            } else {
+              // If empty, just focus the element
+              range.selectNodeContents(contentEditableEl);
+              range.collapse(false);
+              selection?.removeAllRanges();
+              selection?.addRange(range);
+            }
+          } catch (err) {
+            console.error("Error setting selection:", err);
+            // Fallback - just focus
+            contentEditableEl.focus();
+          }
+        }
+      } else {
+        console.warn("ContentEditable ref not found for block:", blockId);
+        // Try again in case the element is still being rendered
         setTimeout(() => {
-          if (editorRefs.current[blockId]) {
-            console.log("Found editor ref on second attempt, focusing:", blockId);
-            editorRefs.current[blockId]?.focus();
+          const retryEl = contentEditableRefs.current[blockId];
+          if (retryEl) {
+            console.log("Found contentEditable ref on retry, focusing:", blockId);
+            retryEl.focus();
           }
         }, 100);
       }
     }, 50);
-  };
+  }, []);
 
-  // Handle editor state change for a block
-  const handleEditorChange = (blockId: string, editorState: EditorState) => {
+  // Add a reference for the autosave timeout
+  const autosaveTimeout = useRef<NodeJS.Timeout | null>(null);
+  
+  // Handle content change from contentEditable div
+  const handleContentChange = useCallback((blockId: string, newContent: string) => {
+    console.log("Content changed for block:", blockId);
+    
+    // Update blocks state with new content
     setBlocks(prevBlocks => 
       prevBlocks.map(block => 
-        block.id === blockId ? { ...block, content: editorState } : block
+        block.id === blockId ? { ...block, content: newContent } : block
       )
     );
-  };
+    
+    // Debounced autosave
+    if (onSave) {
+      if (autosaveTimeout.current) {
+        clearTimeout(autosaveTimeout.current);
+      }
+      
+      autosaveTimeout.current = setTimeout(() => {
+        console.log("Autosaving content...");
+        const html = getContentAsHtml();
+        onSave(html);
+      }, 1500); // 1.5 second debounce
+    }
+  }, [onSave]);
   
-  // Handle key commands within an editor
-  const handleKeyCommand = (blockId: string, command: string) => {
+  // Event handler for input events on contentEditable
+  const handleInput = useCallback((blockId: string, e: React.FormEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLDivElement;
+    handleContentChange(blockId, target.innerHTML);
+  }, [handleContentChange]);
+  
+  // Track when the user clicks into an editor
+  const handleFocus = useCallback((blockId: string, e: React.FocusEvent<HTMLDivElement>) => {
+    console.log("Block focused:", blockId);
+    updateActiveBlockId(blockId);
+  }, [updateActiveBlockId]);
+  
+  // Track when the user clicks out of an editor
+  const handleBlur = useCallback((blockId: string, e: React.FocusEvent<HTMLDivElement>) => {
+    console.log("Block blurred:", blockId);
+    // Don't clear the active block immediately - this allows clicking back in
+    // We'll use a small timeout to see if another block gets focus
+    setTimeout(() => {
+      // Only clear if no block has been focused in the meantime
+      if (activeBlockId === blockId) {
+        // We're not clearing the active block anymore, to allow clicking back in
+        // updateActiveBlockId(null);
+      }
+    }, 100);
+  }, [activeBlockId]);
+  
+  // Handle keyboard events with direct DOM commands
+  const handleKeyDown = useCallback((blockId: string, e: React.KeyboardEvent) => {
     const block = blocks.find(b => b.id === blockId);
-    if (!block) return 'not-handled';
+    if (!block) return;
     
-    if (command === 'bold') {
-      const newState = RichUtils.toggleInlineStyle(block.content, 'BOLD');
-      handleEditorChange(blockId, newState);
-      return 'handled';
-    } else if (command === 'italic') {
-      const newState = RichUtils.toggleInlineStyle(block.content, 'ITALIC');
-      handleEditorChange(blockId, newState);
-      return 'handled';
-    }
-    
-    const newState = RichUtils.handleKeyCommand(block.content, command);
-    if (newState) {
-      handleEditorChange(blockId, newState);
-      return 'handled';
-    }
-    
-    return 'not-handled';
-  };
-  
-  // Handle special key bindings
-  const keyBindingFn = (blockId: string, e: React.KeyboardEvent): string | null => {
     // Handle keyboard shortcuts
-    if (e.key === 'b' && KeyBindingUtil.hasCommandModifier(e)) {
-      return 'bold';
-    } else if (e.key === 'i' && KeyBindingUtil.hasCommandModifier(e)) {
-      return 'italic';
-    } else if (e.key === 'Enter' && !e.shiftKey) {
-      const block = blocks.find(b => b.id === blockId);
-      if (!block) return null;
+    if (e.key === 'b' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      document.execCommand('bold');
       
-      // Get content from current block
-      const contentState = block.content.getCurrentContent();
-      const selection = block.content.getSelection();
+      // Make sure to capture changes after the execCommand
+      const target = e.target as HTMLDivElement;
+      handleContentChange(blockId, target.innerHTML);
+      return;
+    }
+    
+    if (e.key === 'i' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      document.execCommand('italic');
       
-      // Check if cursor is at the end of the block
-      const currentBlock = contentState.getBlockForKey(selection.getAnchorKey());
-      const isAtEnd = selection.getAnchorOffset() === currentBlock.getLength();
+      // Make sure to capture changes after the execCommand
+      const target = e.target as HTMLDivElement;
+      handleContentChange(blockId, target.innerHTML);
+      return;
+    }
+    
+    // Handle Enter key to create new blocks
+    if (e.key === 'Enter' && !e.shiftKey) {
+      const selection = window.getSelection();
+      if (!selection) return;
+      
+      const range = selection.getRangeAt(0);
+      const startContainer = range.startContainer;
+      
+      // Get the contenteditable element
+      const contentEditableEl = contentEditableRefs.current[blockId];
+      if (!contentEditableEl) return;
+      
+      // Check if cursor is at the end
+      const isAtEnd = range.startOffset === (startContainer.textContent?.length || 0) &&
+                     !range.startContainer.nextSibling && 
+                     !range.startContainer.parentElement?.nextSibling;
       
       if (isAtEnd) {
+        e.preventDefault();
         // Create a new block below this one
-        addBlockAfter(blockId);
-        return 'handled';
+        doAddBlockAfter(blockId);
       }
     }
-    
-    return getDefaultKeyBinding(e);
-  };
+  }, [blocks, handleContentChange]);
+  
+  // Helper function to avoid circular dependency
+  function doAddBlockAfter(blockId: string) {
+    addBlockAfter(blockId);
+  }
   
   // Add a new block after the specified block
-  const addBlockAfter = (blockId: string) => {
+  const addBlockAfter = useCallback((blockId: string) => {
     if (onAddBlock) {
       onAddBlock(blockId);
       return;
@@ -324,7 +400,7 @@ export default function DocumentEditor({
       updateActiveBlockId(newBlockId);
       focusEditor(newBlockId);
     }, 50);
-  };
+  }, [blocks, focusEditor, onAddBlock, updateActiveBlockId]);
   
   // Delete the specified block
   const deleteBlock = (blockId: string) => {
@@ -479,9 +555,18 @@ export default function DocumentEditor({
       return;
     }
     
-    // Get current text content
-    const contentState = block.content.getCurrentContent();
-    const plainText = contentState.getPlainText();
+    // Get current text content - use the contentEditable's text content
+    const contentEditableEl = contentEditableRefs.current[blockId];
+    if (!contentEditableEl) {
+      console.error("ContentEditable ref not found:", blockId);
+      setIsGeneratingAI(false);
+      return;
+    }
+    
+    // Extract plain text from HTML content
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = block.content;
+    const plainText = tempDiv.textContent || '';
     
     let enhancedText = '';
     
@@ -518,37 +603,28 @@ export default function DocumentEditor({
     // Simulate a 1-second delay for AI processing
     await new Promise(resolve => setTimeout(resolve, 1000));
     
-    // Create a new content state with the enhanced text
-    const selectionState = SelectionState.createEmpty(contentState.getFirstBlock().getKey());
-    const entireDocumentSelection = selectionState.merge({
-      anchorOffset: 0,
-      focusOffset: plainText.length,
-      focusKey: contentState.getLastBlock().getKey(),
-    });
-    
-    const newContentState = Modifier.replaceText(
-      contentState,
-      entireDocumentSelection,
-      enhancedText
-    );
-    
-    const newEditorState = EditorState.push(
-      block.content,
-      newContentState,
-      'insert-characters'
-    );
+    // Create enhanced HTML content
+    const newContent = `<div>${enhancedText}</div>`;
     
     // Update the block with the new content and mark it as AI-assisted
     setBlocks(prevBlocks => 
       prevBlocks.map(b => 
         b.id === blockId 
-          ? { ...b, content: newEditorState, aiAssisted: true } 
+          ? { ...b, content: newContent, aiAssisted: true } 
           : b
       )
     );
     
+    // Update the contentEditable element directly as well
+    if (contentEditableEl) {
+      contentEditableEl.innerHTML = newContent;
+    }
+    
     setIsGeneratingAI(false);
     setShowAIMenu(null);
+    
+    // Trigger autosave
+    handleContentChange(blockId, newContent);
     
     toast({
       title: "AI Enhancement Applied",
@@ -559,126 +635,49 @@ export default function DocumentEditor({
     console.log("AI enhancement completed for block", blockId);
   };
   
-  // Convert a block to HTML
-  const blockToHtml = (block: EditorBlock): string => {
-    const contentState = block.content.getCurrentContent();
-    const raw = convertToRaw(contentState);
-    
-    // Map block type to HTML tag
-    const getBlockTag = (type: EditorBlock['type']): string => {
-      switch (type) {
-        case 'heading-one': return 'h1';
-        case 'heading-two': return 'h2';
-        case 'heading-three': return 'h3';
-        case 'unordered-list': return 'ul';
-        case 'ordered-list': return 'ol';
-        case 'code': return 'pre';
-        case 'quote': return 'blockquote';
-        default: return 'p';
-      }
-    };
-    
-    // Get wrapper tag based on block type
-    const wrapperTag = getBlockTag(block.type);
-    
-    // Process the blocks and inline styles
-    let html = '';
-    raw.blocks.forEach(rawBlock => {
-      let text = rawBlock.text;
-      if (text.length === 0) {
-        // Handle empty blocks
-        html += `<${wrapperTag}><br/></${wrapperTag}>`;
-        return;
-      }
-      
-      // Handle inline styles
-      let styledText = text;
-      const inlineStyleRanges = [...rawBlock.inlineStyleRanges].sort((a, b) => a.offset - b.offset);
-      
-      if (inlineStyleRanges.length > 0) {
-        // This is a simplified approach - a real implementation would handle
-        // overlapping styles better
-        let offset = 0;
-        let result = '';
-        
-        for (let i = 0; i < text.length; i++) {
-          const char = text[i];
-          let styled = char;
-          
-          // Apply styles to this character
-          for (const range of inlineStyleRanges) {
-            if (i >= range.offset && i < range.offset + range.length) {
-              switch (range.style) {
-                case 'BOLD':
-                  styled = `<strong>${styled}</strong>`;
-                  break;
-                case 'ITALIC':
-                  styled = `<em>${styled}</em>`;
-                  break;
-                case 'UNDERLINE':
-                  styled = `<u>${styled}</u>`;
-                  break;
-                case 'STRIKETHROUGH':
-                  styled = `<s>${styled}</s>`;
-                  break;
-                case 'ALIGN_LEFT':
-                  // Apply using a span with style
-                  styled = `<span style="text-align:left">${styled}</span>`;
-                  break;
-                case 'ALIGN_CENTER':
-                  styled = `<span style="text-align:center">${styled}</span>`;
-                  break;
-                case 'ALIGN_RIGHT':
-                  styled = `<span style="text-align:right">${styled}</span>`;
-                  break;
-                case 'ALIGN_JUSTIFY':
-                  styled = `<span style="text-align:justify">${styled}</span>`;
-                  break;
-              }
-            }
-          }
-          
-          result += styled;
-        }
-        
-        styledText = result;
-      }
-      
-      // Create the block with proper wrapper tag
-      if (block.type === 'unordered-list' || block.type === 'ordered-list') {
-        // Special handling for lists
-        html += `<${wrapperTag}><li>${styledText}</li></${wrapperTag}>`;
-      } else if (block.type === 'code') {
-        // Special handling for code blocks
-        html += `<${wrapperTag}><code>${styledText}</code></${wrapperTag}>`;
-      } else {
-        // Standard block
-        html += `<${wrapperTag}>${styledText}</${wrapperTag}>`;
-      }
-    });
-    
-    return html;
+  // Get proper HTML tag for a block type
+  const getBlockTag = (type: EditorBlock['type']): string => {
+    switch (type) {
+      case 'heading-one': return 'h1';
+      case 'heading-two': return 'h2';
+      case 'heading-three': return 'h3';
+      case 'unordered-list': return 'ul';
+      case 'ordered-list': return 'ol';
+      case 'code': return 'pre';
+      case 'quote': return 'blockquote';
+      default: return 'div';
+    }
   };
   
-  // Convert all blocks to HTML
-  const getContentAsHtml = (): string => {
+  // Get all content as HTML (much simpler now - we just combine the HTML strings)
+  const getContentAsHtml = useCallback((): string => {
     // Class for AI-assisted blocks
     const aiClass = 'ai-assisted-block';
     
     return blocks.map(block => {
-      const html = blockToHtml(block);
+      // The content is already HTML, no need to convert
+      let html = block.content;
       
       // Add AI assistance indicator class if needed
       if (block.aiAssisted) {
-        // Add class to the opening tag
-        return html.replace(/^<([^>]+)>/, `<$1 class="${aiClass}">`);
+        // Add class to the first element in the HTML
+        html = html.replace(/^<([^>]+)>/, `<$1 class="${aiClass}">`);
       }
       
       return html;
     }).join('\n');
-  };
+  }, [blocks]);
   
-  // Handle save action
+  // Autosave effect
+  useEffect(() => {
+    return () => {
+      if (autosaveTimeout.current) {
+        clearTimeout(autosaveTimeout.current);
+      }
+    };
+  }, []);
+  
+  // Handle manual save action (if needed)
   const handleSave = () => {
     if (onSave) {
       const html = getContentAsHtml();
@@ -696,15 +695,10 @@ export default function DocumentEditor({
             Document Editor
           </div>
           <div className="flex space-x-2">
-            <Button size="sm" onClick={handleSave}>
-              <Save className="h-4 w-4 mr-1" />
-              Save
-            </Button>
-            
-            <Button variant="outline" size="sm" onClick={onCancel}>
-              <X className="h-4 w-4 mr-1" />
-              Cancel
-            </Button>
+            {/* No explicit save button needed with autosave */}
+            <div className="text-xs text-gray-400">
+              Autosaving...
+            </div>
           </div>
         </div>
       )}
@@ -721,9 +715,23 @@ export default function DocumentEditor({
               block.aiAssisted ? 'bg-blue-50/30 hover:bg-blue-50/50' : ''
             }`}
             onClick={(e) => {
-              e.preventDefault();
+              // No preventDefault - allow natural editing interactions to work
+              
+              // Track if we're already focusing a contentEditable in this block
+              const alreadyFocused = contentEditableRefs.current[block.id]?.contains(document.activeElement);
+              
+              // If we clicked directly in the contentEditable, let the browser handle it
+              const clickedContentEditable = contentEditableRefs.current[block.id]?.contains(e.target as Node);
+              
+              console.log(`Block click: alreadyFocused=${alreadyFocused}, clickedContentEditable=${clickedContentEditable}`);
+              
               updateActiveBlockId(block.id);
-              focusEditor(block.id);
+              
+              // Only manually focus if we didn't click directly in the contentEditable
+              // and the block isn't already focused
+              if (!clickedContentEditable && !alreadyFocused) {
+                focusEditor(block.id, false); // Start fresh, move to end
+              }
             }}
           >
             {/* Minimal controls for adding blocks */}
@@ -759,25 +767,25 @@ export default function DocumentEditor({
               </div>
             )}
             
-            {/* Block editor */}
+            {/* Block editor - contentEditable div */}
             <div 
-              className={`block-editor min-h-[40px] ${
+              ref={el => contentEditableRefs.current[block.id] = el}
+              className={`block-editor min-h-[40px] cursor-text ${
                 block.type === 'quote' ? 'pl-3 border-l-4 border-gray-300' :
                 block.type === 'code' ? 'font-mono bg-gray-800 text-white rounded p-2' : ''
               } ${
                 block.aiAssisted ? 'text-blue-900' : ''
               }`}
-            >
-              <Editor
-                ref={(ref) => editorRefs.current[block.id] = ref}
-                editorState={block.content}
-                onChange={(editorState) => handleEditorChange(block.id, editorState)}
-                handleKeyCommand={(command) => handleKeyCommand(block.id, command)}
-                keyBindingFn={(e) => keyBindingFn(block.id, e)}
-                placeholder={`Type here${block.aiAssisted ? ' (AI assisted)' : ''}...`}
-                spellCheck={true}
-              />
-            </div>
+              contentEditable={true}
+              dangerouslySetInnerHTML={{ __html: block.content }}
+              onInput={(e) => handleInput(block.id, e)}
+              onKeyDown={(e) => handleKeyDown(block.id, e)}
+              onFocus={(e) => handleFocus(block.id, e)}
+              onBlur={(e) => handleBlur(block.id, e)}
+              suppressContentEditableWarning={true}
+              spellCheck={true}
+              data-placeholder={`Type here${block.aiAssisted ? ' (AI assisted)' : ''}...`}
+            ></div>
             
             {/* AI processing indicator */}
             {isGeneratingAI && showAIMenu === block.id && (
@@ -819,29 +827,63 @@ export default function DocumentEditor({
       
       {/* Custom styles for editor */}
       <style jsx global>{`
-        .document-editor .DraftEditor-root {
+        /* Basic styles for the contenteditable blocks */
+        .document-editor .block-editor {
           font-family: Arial, sans-serif;
           font-size: 16px;
           line-height: 1.6;
+          cursor: text;
+          outline: none;
+          min-height: 1.6em;
+          transition: background-color 0.2s;
+        }
+        
+        /* Empty block placeholder styling */
+        .document-editor .block-editor:empty:before {
+          content: attr(data-placeholder);
+          color: #aaa;
+          pointer-events: none;
+          display: block;
+        }
+        
+        /* This helps ensure the cursor appears in the right spot when clicking in */
+        .document-editor .block-editor:focus {
+          caret-color: black;
+        }
+        
+        /* Improve selection visibility */
+        .document-editor .block-editor::selection,
+        .document-editor .block-editor *::selection {
+          background: rgba(59, 130, 246, 0.2);
         }
         
         /* Block type specific styles */
-        .document-editor .editor-block[data-type="heading-one"] .DraftEditor-root {
+        .document-editor .editor-block[data-type="heading-one"] .block-editor {
           font-size: 24px;
           font-weight: bold;
           line-height: 1.3;
         }
         
-        .document-editor .editor-block[data-type="heading-two"] .DraftEditor-root {
+        .document-editor .editor-block[data-type="heading-two"] .block-editor {
           font-size: 20px;
           font-weight: bold;
           line-height: 1.3;
         }
         
-        .document-editor .editor-block[data-type="heading-three"] .DraftEditor-root {
+        .document-editor .editor-block[data-type="heading-three"] .block-editor {
           font-size: 18px;
           font-weight: bold;
           line-height: 1.3;
+        }
+        
+        /* Add hover state to indicate editability */
+        .document-editor .editor-block:hover {
+          background-color: rgba(0, 0, 0, 0.02);
+        }
+        
+        /* Focus state for the current editing block */
+        .document-editor .block-editor:focus {
+          background-color: rgba(0, 0, 0, 0.03);
         }
         
         /* AI assisted block styling */
@@ -849,6 +891,11 @@ export default function DocumentEditor({
           background-color: rgba(219, 234, 254, 0.3);
           border-left: 3px solid rgba(59, 130, 246, 0.5);
           padding-left: 16px;
+        }
+        
+        /* Ensure cursor is always text over editable content */
+        .document-editor .block-editor {
+          cursor: text !important;
         }
       `}</style>
     </div>

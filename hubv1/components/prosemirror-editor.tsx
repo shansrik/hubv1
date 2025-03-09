@@ -33,12 +33,14 @@ interface ProseMirrorEditorProps {
   initialContent?: string
   onSave?: (content: string) => void
   onCancel?: () => void
+  alwaysEditable?: boolean
 }
 
 export default function ProseMirrorEditor({ 
   initialContent = '<p>Start typing...</p>', 
   onSave,
-  onCancel 
+  onCancel,
+  alwaysEditable = false
 }: ProseMirrorEditorProps) {
   const { toast } = useToast()
   const [isGeneratingAI, setIsGeneratingAI] = useState(false)
@@ -112,30 +114,57 @@ export default function ProseMirrorEditor({
     editorProps: {
       attributes: {
         class: 'prose max-w-none focus:outline-none min-h-[300px] px-2 py-4 cursor-text',
+        id: `editor-${Date.now()}`, // Add unique ID for menu targeting
       },
+      handleClick(view, pos, event) {
+        // Important for click handling - helps prevent unwanted behaviors
+        return false;
+      }
     },
     onFocus: () => {
       console.log("Editor focused");
       setShowFloatingMenu(true);
     },
-    onBlur: () => {
+    onBlur: (e) => {
       console.log("Editor blurred");
-      setTimeout(() => setShowFloatingMenu(false), 200);
+      
+      // When clicking on format menu, don't trigger blur actions
+      if (e?.relatedTarget?.closest('.format-menu-container')) {
+        return;
+      }
+      
+      // For always editable mode, still retain focus capabilities
+      // and ensure content is properly saved
+      if (alwaysEditable) {
+        // Keep the floating menu available
+        // Only save content when needed, no UI changes
+        requestAnimationFrame(() => {
+          if (editor && editor.isEditable) {
+            saveContent();
+          }
+        });
+      } else {
+        // Standard behavior - hide floating menu with a slight delay
+        setTimeout(() => setShowFloatingMenu(false), 200);
+      }
     },
+    editable: true, // Always start as editable
   })
   
   // Autosave content with debounce
   const saveContent = useCallback(() => {
     if (!editor || !onSave) return
     
-    const html = editor.getHTML()
-    onSave(html)
-    
-    // Update last saved timestamp
-    setLastSavedAt(new Date())
-    
-    // Silent save - no toast notification for autosave
-    // We'll only show toasts for explicit user actions
+    // Use a try-catch to handle potential DOM errors
+    try {
+      const html = editor.getHTML()
+      onSave(html)
+      
+      // Update last saved timestamp
+      setLastSavedAt(new Date())
+    } catch (error) {
+      console.error("Error saving content:", error)
+    }
   }, [editor, onSave])
   
   // Debounced autosave - waits 1.5 seconds after typing stops
@@ -152,7 +181,10 @@ export default function ProseMirrorEditor({
       
       // Set new timeout
       saveTimeout = setTimeout(() => {
-        saveContent()
+        // Check if editor is still valid before saving
+        if (editor && editor.isEditable) {
+          saveContent()
+        }
       }, 1500) // 1.5 seconds debounce
     }
 
@@ -298,8 +330,85 @@ export default function ProseMirrorEditor({
   useEffect(() => {
     if (editor) {
       console.log("Editor initialized successfully");
+      
+      // Make sure when we click inside any editor we properly focus it
+      const editorElement = editor.options.element;
+      if (editorElement) {
+        // Assign a unique ID if not already set
+        if (!editorElement.getAttribute('data-editor-id')) {
+          const editorId = Math.random().toString(36).substring(2, 9);
+          editorElement.setAttribute('data-editor-id', editorId);
+        }
+        
+        const handleClick = () => {
+          if (!editor.isFocused) {
+            editor.commands.focus();
+          }
+        };
+        
+        editorElement.addEventListener('click', handleClick);
+        
+        // Initialize with a higher z-index to ensure menu visibility
+        editorElement.style.zIndex = '1';
+        
+        return () => {
+          editorElement.removeEventListener('click', handleClick);
+        };
+      }
     }
   }, [editor]);
+
+  // Global document click handler for menu management
+  useEffect(() => {
+    // This single global handler manages all menus for all editors
+    const handleDocumentClick = (e: MouseEvent) => {
+      // Don't hide menus when clicking inside menu containers
+      if ((e.target as Element)?.closest('.format-menu-container') || 
+          (e.target as Element)?.closest('.format-menu-dropdown')) {
+        return;
+      }
+      
+      // Hide all format menus
+      document.querySelectorAll('.format-menu-dropdown').forEach(el => {
+        el.classList.add('hidden');
+      });
+    };
+    
+    // Add global document click handler
+    document.addEventListener('click', handleDocumentClick);
+    
+    return () => {
+      document.removeEventListener('click', handleDocumentClick);
+    };
+  }, []);
+  
+  // Keep editor editable and ensure it maintains focus state
+  useEffect(() => {
+    if (editor && alwaysEditable) {
+      // Force editable state
+      editor.setEditable(true);
+      
+      // Configure behavior for always-editable mode
+      const handleClick = (e: MouseEvent) => {
+        // Process only for this specific editor's element
+        const editorElement = editor.options.element;
+        
+        if (editorElement.contains(e.target as Node)) {
+          // When clicking inside, make sure it's editable and focused
+          if (!editor.isFocused) {
+            editor.commands.focus('end');
+          }
+        }
+      };
+      
+      // Add click handler to this specific editor's element
+      editor.options.element.addEventListener('click', handleClick);
+      
+      return () => {
+        editor.options.element.removeEventListener('click', handleClick);
+      };
+    }
+  }, [editor, alwaysEditable]);
 
   if (!editor) {
     return (
@@ -312,7 +421,7 @@ export default function ProseMirrorEditor({
   }
   
   return (
-    <div className="relative editor-container">
+    <div className={`relative editor-container ${alwaysEditable ? 'always-editable' : ''}`}>
       {/* No container UI or Save/Cancel buttons - borderless design */}
       
       {/* Small autosave indicator */}
@@ -324,59 +433,120 @@ export default function ProseMirrorEditor({
       
       {/* Optional placeholder text that shows up when editor is empty */}
       {editor?.isEmpty && !editor?.isFocused && (
-        <div className="absolute top-4 left-2 text-gray-400 pointer-events-none">
+        <div className="absolute top-4 left-2 text-gray-400 pointer-events-none cursor-text">
           Click to edit text...
         </div>
       )}
       
       {/* Editor content with menu trigger */}
-      <div className="relative" onClick={() => editor?.commands.focus()}>
+      <div 
+        className={`relative ${alwaysEditable ? 'always-editable-container' : ''}`} 
+        onClick={() => {
+          if (editor && !editor.isFocused) {
+            editor.commands.focus('end');
+          }
+        }}
+      >
         {/* Menu button removed - using the left margin menu instead */}
         <div className="flex">
           {/* Left margin with menu */}
           <div className="w-10 flex-shrink-0 relative">
             <div className="absolute top-4 left-2">
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 w-6 p-0 rounded-full border border-gray-200 bg-white shadow-sm hover:bg-gray-50"
-                  >
-                    <Plus className="h-3 w-3" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent side="right" className="p-0 w-44">
-                  <div className="flex flex-col py-1">
-                    <Button 
-                      variant="ghost"
-                      size="sm"
-                      className="justify-start rounded-none h-8 px-3"
-                      onClick={() => editor?.chain().focus().setParagraph().run()}
-                    >
-                      <span className="text-sm">Text</span>
-                    </Button>
-                    <Button 
-                      variant="ghost"
-                      size="sm"
-                      className="justify-start rounded-none h-8 px-3"
-                      onClick={() => editor?.chain().focus().toggleHeading({ level: 1 }).run()}
-                    >
-                      <Heading1 className="h-4 w-4 mr-2" />
-                      <span className="text-sm">Heading 1</span>
-                    </Button>
-                    <Button 
-                      variant="ghost"
-                      size="sm"
-                      className="justify-start rounded-none h-8 px-3"
-                      onClick={() => editor?.chain().focus().toggleBulletList().run()}
-                    >
-                      <List className="h-4 w-4 mr-2" />
-                      <span className="text-sm">Bullet List</span>
-                    </Button>
-                  </div>
-                </PopoverContent>
-              </Popover>
+{/* Global format menu button */}
+              <div className="format-menu-container">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 w-6 p-0 rounded-full border border-gray-200 bg-white shadow-sm hover:bg-gray-50"
+                  onMouseDown={(e) => {
+                    // Must use mousedown to prevent blur
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    // Create unique ID for this editor's menu
+                    const editorId = editor.options.element.getAttribute('data-editor-id') || 
+                               Math.random().toString(36).substring(2, 9);
+                    
+                    // Ensure editor has ID attribute for future reference
+                    if (!editor.options.element.getAttribute('data-editor-id')) {
+                      editor.options.element.setAttribute('data-editor-id', editorId);
+                    }
+                    
+                    // Find or create menu for this editor
+                    let menu = document.getElementById(`format-menu-${editorId}`);
+                    
+                    if (!menu) {
+                      // Create menu if it doesn't exist yet
+                      menu = document.createElement('div');
+                      menu.id = `format-menu-${editorId}`;
+                      menu.className = "absolute left-8 top-0 bg-white rounded-md shadow-lg border border-gray-200 p-1 z-50 format-menu-dropdown";
+                      menu.style.minWidth = "150px";
+                      menu.innerHTML = `
+                        <div class="flex flex-col py-1">
+                          <button class="justify-start rounded-none h-8 px-3 w-full text-left hover:bg-gray-100" data-action="paragraph">
+                            <span class="text-sm">Text</span>
+                          </button>
+                          <button class="justify-start rounded-none h-8 px-3 w-full text-left hover:bg-gray-100" data-action="heading">
+                            <span class="text-sm font-bold">Heading 1</span>
+                          </button>
+                          <button class="justify-start rounded-none h-8 px-3 w-full text-left hover:bg-gray-100" data-action="bulletList">
+                            <span class="text-sm">• Bullet List</span>
+                          </button>
+                        </div>
+                      `;
+                      
+                      // Apply the format when item is clicked
+                      menu.addEventListener('mousedown', (menuEvent) => {
+                        menuEvent.preventDefault();
+                        menuEvent.stopPropagation();
+                        
+                        // Get the action from data attribute
+                        const target = menuEvent.target as HTMLElement;
+                        const button = target.closest('button');
+                        if (button) {
+                          const action = button.getAttribute('data-action');
+                          
+                          // Apply formatting based on action
+                          if (action === 'paragraph') {
+                            editor.chain().focus().setParagraph().run();
+                          } else if (action === 'heading') {
+                            editor.chain().focus().toggleHeading({ level: 1 }).run();
+                          } else if (action === 'bulletList') {
+                            editor.chain().focus().toggleBulletList().run();
+                          }
+                          
+                          // Hide menu
+                          menu!.classList.add('hidden');
+                        }
+                      });
+                      
+                      // Add menu to document body
+                      document.body.appendChild(menu);
+                    }
+                    
+                    // Position menu relative to button - must offset to align correctly
+                    const buttonRect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                    menu.style.position = 'fixed';
+                    menu.style.top = `${buttonRect.top}px`;
+                    menu.style.left = `${buttonRect.left + 30}px`;
+                    
+                    // Toggle menu visibility
+                    const isHidden = menu.classList.contains('hidden');
+                    
+                    // Hide all other menus first
+                    document.querySelectorAll('.format-menu-dropdown').forEach(el => {
+                      el.classList.add('hidden');
+                    });
+                    
+                    // Show this menu if it was hidden
+                    if (isHidden) {
+                      menu.classList.remove('hidden');
+                    }
+                  }}
+                >
+                  <Plus className="h-3 w-3" />
+                </Button>
+              </div>
             </div>
           </div>
           

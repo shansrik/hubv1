@@ -1,220 +1,96 @@
 /* Document editor styles */
-
-/* Focus, hover, and active states for editor */
-.ProseMirror {
-  outline: none;
-  cursor: text !important;
-  min-height: 300px;
+.block.editing {
+  @apply ring-2 ring-blue-500 ring-offset-2;
 }
 
-/* Remove default focus ring */
-.ProseMirror:focus {
-  outline: none;
+.block:hover {
+  @apply bg-blue-50 bg-opacity-50 cursor-text;
 }
 
-/* Ensure the editor is always clickable */
-.ProseMirror-focused, 
-.ProseMirror:hover {
-  cursor: text !important;
+.document-block {
+  position: relative;
+  margin-bottom: 1rem;
+  min-height: 1.5rem;
 }
 
-/* Heading styles */
-.ProseMirror h1 {
-  font-size: 2em;
-  margin-top: 0.67em;
-  margin-bottom: 0.67em;
-  font-weight: bold;
+.document-block:hover {
+  @apply bg-gray-50;
 }
 
-.ProseMirror h2 {
-  font-size: 1.5em;
-  margin-top: 0.83em;
-  margin-bottom: 0.83em;
-  font-weight: bold;
-}
-
-.ProseMirror h3 {
-  font-size: 1.17em;
-  margin-top: 1em;
-  margin-bottom: 1em;
-  font-weight: bold;
-}
-
-/* Paragraph styles */
-.ProseMirror p {
-  margin-top: 1em;
-  margin-bottom: 1em;
-}
-
-/* List styles */
-.ProseMirror ul,
-.ProseMirror ol {
-  padding-left: 1.4em;
-  margin-top: 1em;
-  margin-bottom: 1em;
-}
-
-.ProseMirror li {
-  margin-bottom: 0.5em;
-}
-
-/* Code block styles */
-.ProseMirror pre {
-  background-color: #2d3748;
-  color: #e2e8f0;
-  padding: 0.75em;
-  border-radius: 0.25em;
-  overflow-x: auto;
-  margin: 1em 0;
-}
-
-/* Blockquote styles */
-.ProseMirror blockquote {
-  border-left: 3px solid #e2e8f0;
-  padding-left: 1em;
-  margin-left: 0;
-  margin-right: 0;
-  font-style: italic;
-}
-
-/* Cursor position indicator */
-.ProseMirror-gapcursor {
-  display: none;
-  pointer-events: none;
-  position: absolute;
-}
-
-.ProseMirror-gapcursor:after {
-  content: "";
-  display: block;
-  position: absolute;
-  top: -2px;
-  width: 20px;
-  border-top: 1px solid #000;
-  animation: ProseMirror-cursor-blink 1.1s steps(2, start) infinite;
-}
-
-@keyframes ProseMirror-cursor-blink {
-  to {
-    visibility: hidden;
-  }
-}
-
-/* Autosave indicator */
-.autosave-indicator {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  font-size: 11px;
-  color: #a0aec0;
-  opacity: 0.7;
-  transition: opacity 0.3s ease;
-}
-
-.autosave-indicator.visible {
+.document-block:hover .block-actions {
   opacity: 1;
 }
 
-.autosave-indicator.hidden {
-  opacity: 0;
-}
-
-/* Bubble menu styles */
-.bubble-menu {
-  display: flex;
-  background-color: white;
-  border: 1px solid #e2e8f0;
-  border-radius: 0.25em;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-  padding: 0.25em;
-}
-
-.bubble-menu button {
-  border: none;
-  background: none;
-  cursor: pointer;
-  border-radius: 0.125em;
-  padding: 0.25em;
-}
-
-.bubble-menu button:hover {
-  background-color: #f7fafc;
-}
-
-.bubble-menu button.active {
-  background-color: #e2e8f0;
-}
-
-/* Standalone button style */
-.menu-button {
+.block-actions {
   position: absolute;
-  left: -24px;
-  transform: translateX(-100%);
-  background: white;
-  border: 1px solid #e2e8f0;
-  border-radius: 50%;
-  width: 20px;
-  height: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
+  top: 0;
+  left: -2.5rem;
   opacity: 0;
-  transition: opacity 0.2s ease;
+  transition: opacity 0.2s;
 }
 
-.ProseMirror:hover .menu-button,
-.menu-button:hover {
-  opacity: 1;
-}
-
-/* Notion-like UI styles */
-.notion-like-editor {
-  max-width: 900px;
-  margin: 0 auto;
-  padding: 30px 0;
-}
-
-/* Make the editor look like a page */
-.notion-like-container {
-  min-height: 100vh;
-  padding: 0 96px;
-  background-color: white;
-}
-
-/* Placeholders - for empty paragraphs */
-.ProseMirror p:first-child:empty::before {
-  content: "Click to edit text...";
-  color: #adb5bd;
-  float: left;
-  pointer-events: none;
-  height: 0;
-}
-
-/* Make sure the editor is always ready for input */
-.ProseMirror {
+.document-editor {
+  width: 100%;
+  height: 100%;
   position: relative;
 }
 
+.always-editable-wrapper {
+  cursor: text !important;
+}
+
+.always-editable-wrapper:hover {
+  @apply bg-blue-50 bg-opacity-25;
+}
+
+/* Fix menu display issues */
+.format-menu-dropdown {
+  z-index: 9999 !important;
+  position: fixed;
+}
+
+.format-menu-container {
+  position: relative;
+  z-index: 999;
+}
+
+/* Button styles to match UI */
+.format-menu-dropdown button {
+  background: transparent;
+  transition: background-color 0.2s;
+  font-family: inherit;
+}
+
+.format-menu-dropdown button:hover {
+  background-color: #f3f4f6;
+}
+
+/* Page container */
+.page-container {
+  isolation: isolate;
+  pointer-events: auto !important;
+}
+
+/* ProseMirror styles */
+.ProseMirror {
+  overflow: visible !important;
+  z-index: 1 !important;
+}
+
+/* Stop content from jumping when menu appears */
 .editor-container {
+  overflow: visible !important;
+  isolation: isolate;
+  contain: none !important;
+}
+
+/* Fix z-index stacking for floating UI elements */
+.editor-container .bubble-menu {
+  z-index: 9999 !important;
+}
+
+/* Make editor content area properly clickable */
+.prose {
   position: relative;
-  z-index: 0;
-}
-
-.editor-container:focus-within::after,
-.editor-container:hover::after {
-  content: '';
-  position: absolute;
-  top: -10px;
-  right: -10px;
-  bottom: -10px;
-  left: -10px;
-  z-index: -1;
-  pointer-events: none;
-  cursor: text;
-}
-
-/* Smooth animations */
-.ProseMirror * {
-  transition: background-color 0.15s ease;
+  z-index: 1;
 }
