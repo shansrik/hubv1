@@ -23,12 +23,15 @@ import {
   Plus,
   Save,
   X,
-  MenuIcon
+  MenuIcon,
+  Check,
+  Settings
 } from 'lucide-react'
 import { Button } from "@/components/ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/components/ui/use-toast"
-import { callClaudeAPI, createReferenceContext } from "@/lib/ai-service"
+import { callOpenAIAPI, createReferenceContext } from "@/lib/ai-service"
 
 interface ProseMirrorEditorProps {
   initialContent?: string
@@ -276,44 +279,84 @@ export default function ProseMirrorEditor({
       - Return ONLY the enhanced text without any additional comments
       `
       
-      // Create user prompt based on enhancement type or custom prompt
-      let userPrompt = ''
-      let toastMessage = ''
+      // Check if there is a selected photo before creating prompts
+      // Get selected photos from the left panel
+      let selectedPhoto = null;
+      let photoDescription = null;
       
-      if (promptType === 'custom' && customPromptText) {
-        userPrompt = `${customPromptText}\n\nHere is the original text:\n"${text}"\n\nProvide your enhanced version:`
-        toastMessage = "Custom enhancement applied"
-      } else {
-        // Standard prompt types
-        switch (promptType) {
-          case 'follow-up':
-            userPrompt = `Add a compelling follow-up sentence to this text that expands on the main idea. Only output the new sentence:\n\n"${text}"`
-            toastMessage = "Follow-up sentence added"
-            break
-          case 'professional':
-            userPrompt = `Rewrite this text in a more professional, formal tone suitable for business communication. Only output the new sentence:\n\n"${text}"`
-            toastMessage = "Text rewritten in professional tone"
-            break
-          case 'concise':
-            userPrompt = `Make this text more concise while preserving the key information:\n\n"${text}"`
-            toastMessage = "Text made concise"
-            break
-          case 'expand':
-            userPrompt = `Expand this text with more details and explanation:\n\n"${text}"`
-            toastMessage = "Text expanded with details"
-            break
-          case 'grammar':
-            userPrompt = `Fix any grammar, spelling, or punctuation errors in this text without changing its meaning:\n\n"${text}"`
-            toastMessage = "Grammar corrected"
-            break
-          default:
-            userPrompt = `Improve this text:\n\n"${text}"`
-            toastMessage = "Text enhanced"
+      // This checks if there's a photo selected indicator in the UI
+      const selectedPhotoIndicator = document.querySelector('.bg-blue-100.text-blue-800');
+      const hasSelectedPhoto = !!selectedPhotoIndicator;
+      
+      // If there's a photo selected indicator, find the actual selected photo
+      if (hasSelectedPhoto) {
+        const selectedPhotoBadges = document.querySelectorAll('[data-photo-id].border-blue-500');
+        
+        if (selectedPhotoBadges.length > 0) {
+          const photoElement = selectedPhotoBadges[0] as HTMLElement;
+          const photoId = photoElement.getAttribute('data-photo-id') || '';
+          const imgElement = photoElement.querySelector('img');
+          const nameElement = photoElement.querySelector('h4');
+          const descElement = photoElement.querySelector('p');
+          
+          if (imgElement) {
+            selectedPhoto = {
+              id: photoId,
+              path: imgElement.getAttribute('src') || '',
+              name: nameElement?.textContent || 'Selected Photo',
+              description: descElement?.textContent || 'No description available'
+            };
+            
+            photoDescription = selectedPhoto.description;
+            
+            console.log("Found selected photo:", selectedPhoto.name, "with description:", photoDescription);
+          }
         }
       }
       
-      // Call the Claude API with our formatted prompts
-      const enhancedText = await enhanceTextWithClaude(systemPrompt, userPrompt, text)
+      // Create user prompt based on enhancement type and photo context
+      let userPrompt = '';
+      let toastMessage = '';
+      
+      // Base context for photo if available
+      const photoContext = selectedPhoto 
+        ? `\n\nReference the following image description in your response: "${photoDescription}"\n` 
+        : '';
+      
+      if (promptType === 'custom' && customPromptText) {
+        userPrompt = `${customPromptText}${photoContext}\n\nHere is the original text:\n"${text}"\n\nProvide your enhanced version that incorporates both the text and any image context provided:`
+        toastMessage = selectedPhoto ? "Custom enhancement with photo context applied" : "Custom enhancement applied"
+      } else {
+        // Standard prompt types with photo context
+        switch (promptType) {
+          case 'follow-up':
+            userPrompt = `Add a compelling follow-up sentence to this text that expands on the main idea.${photoContext}\nOriginal text: "${text}"\nOnly output the new sentence:`
+            toastMessage = selectedPhoto ? "Follow-up with photo context added" : "Follow-up sentence added"
+            break
+          case 'professional':
+            userPrompt = `Rewrite this text in a more professional, formal tone suitable for business communication.${photoContext}\nOriginal text: "${text}"\nProvide the rewritten text:`
+            toastMessage = selectedPhoto ? "Text rewritten with photo context" : "Text rewritten in professional tone"
+            break
+          case 'concise':
+            userPrompt = `Make this text more concise while preserving the key information.${photoContext}\nOriginal text: "${text}"\nProvide the concise version:`
+            toastMessage = selectedPhoto ? "Text made concise with photo reference" : "Text made concise"
+            break
+          case 'expand':
+            userPrompt = `Expand this text with more details and explanation.${photoContext}\nOriginal text: "${text}"\nProvide the expanded version:`
+            toastMessage = selectedPhoto ? "Text expanded with photo details" : "Text expanded with details"
+            break
+          case 'grammar':
+            userPrompt = `Fix any grammar, spelling, or punctuation errors in this text without changing its meaning.${photoContext}\nOriginal text: "${text}"\nProvide the corrected text:`
+            toastMessage = "Grammar corrected"
+            break
+          default:
+            userPrompt = `Improve this text${selectedPhoto ? ' and incorporate details from the referenced image' : ''}.${photoContext}\nOriginal text: "${text}"\nProvide the improved version:`
+            toastMessage = selectedPhoto ? "Text enhanced with photo context" : "Text enhanced"
+        }
+      }
+      
+      // Call the AI API with our formatted prompts
+      const enhancedText = await enhanceTextWithAI(systemPrompt, userPrompt, text)
       
       // Replace the selected text with the enhanced text
       if (isSelection) {
@@ -335,7 +378,7 @@ export default function ProseMirrorEditor({
       }
       
       toast({
-        title: "Claude Enhancement Applied",
+        title: "GPT-4 Enhancement Applied",
         description: toastMessage,
         duration: 3000
       })
@@ -343,7 +386,7 @@ export default function ProseMirrorEditor({
       console.error("Error enhancing text:", error)
       toast({
         title: "Enhancement failed",
-        description: "There was an error enhancing your text with Claude.",
+        description: "There was an error enhancing your text with GPT-4.",
         variant: "destructive"
       })
     } finally {
@@ -351,13 +394,194 @@ export default function ProseMirrorEditor({
     }
   }
   
-  // Use the API route to call Claude
-  const enhanceTextWithClaude = async (systemPrompt: string, userPrompt: string, originalText: string): Promise<string> => {
+  // Use the API route to call OpenAI
+  const enhanceTextWithAI = async (
+    systemPrompt: string, 
+    userPrompt: string, 
+    originalText: string, 
+    options?: { includePhoto?: boolean; photoData?: string | null }
+  ): Promise<string> => {
     try {
-      console.log("Calling Claude API via API route with prompt:", userPrompt.substring(0, 50) + "...");
+      console.log("Calling OpenAI API via API route with prompt:", userPrompt.substring(0, 50) + "...");
       
-      // Call our API route that handles Claude API requests
-      const response = await fetch('/api/claude', {
+      // Check for selected photo in the document
+      // This is a DOM-based approach to check if a photo is selected in the UI
+      const selectedPhotoIndicator = document.querySelector('.bg-blue-100.text-blue-800');
+      const hasSelectedPhoto = !!selectedPhotoIndicator;
+      
+      // Get selected photos from the left panel
+      let photoData = null;
+      let photoDescription = null;
+      
+      if (hasSelectedPhoto) {
+        const selectedPhotoBadges = document.querySelectorAll('[data-photo-id].border-blue-500');
+        
+        if (selectedPhotoBadges.length > 0) {
+          const photoElement = selectedPhotoBadges[0] as HTMLElement;
+          const imgElement = photoElement.querySelector('img');
+          const descElement = photoElement.querySelector('p');
+          
+          if (imgElement) {
+            photoDescription = descElement?.textContent || 'No description available';
+            console.log('Found selected photo with description:', photoDescription);
+            
+            // Get the image data - we need the base64 data
+            const imgSrc = imgElement.getAttribute('src') || null;
+            
+            // If the image is already a data URL (base64), use it directly
+            if (imgSrc && imgSrc.startsWith('data:')) {
+              photoData = imgSrc;
+              console.log('Using existing base64 data URL for image');
+            }
+            // If it's a remote URL, we need to fetch and convert it
+            else if (imgSrc) {
+              console.log('Need to convert image URL to base64:', imgSrc.substring(0, 30) + '...');
+              
+              try {
+                // Define the image fetching function
+                const fetchImage = async (url: string): Promise<string> => {
+                  const response = await fetch(url);
+                  if (!response.ok) {
+                    throw new Error(`Failed to fetch image: ${response.status}`);
+                  }
+                  const blob = await response.blob();
+                  return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(reader.result as string);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(blob);
+                  });
+                };
+                
+                // Add a resize function to reduce image size before sending
+                const resizeImage = async (dataUrl: string, maxWidth = 800, maxHeight = 600, quality = 0.7): Promise<string> => {
+                  return new Promise((resolve, reject) => {
+                    const img = new Image();
+                    img.crossOrigin = "anonymous";
+                    img.onload = () => {
+                      let width = img.width;
+                      let height = img.height;
+                      
+                      console.log(`Original image dimensions: ${width}x${height}`);
+                      
+                      // Calculate new dimensions while maintaining aspect ratio
+                      if (width > maxWidth) {
+                        height = Math.round(height * (maxWidth / width));
+                        width = maxWidth;
+                      }
+                      if (height > maxHeight) {
+                        width = Math.round(width * (maxHeight / height));
+                        height = maxHeight;
+                      }
+                      
+                      console.log(`Resized dimensions: ${width}x${height}`);
+                      
+                      // Create canvas and resize image
+                      const canvas = document.createElement('canvas');
+                      canvas.width = width;
+                      canvas.height = height;
+                      const ctx = canvas.getContext('2d');
+                      
+                      if (!ctx) {
+                        reject(new Error("Failed to get canvas context"));
+                        return;
+                      }
+                      
+                      // Draw with white background to handle transparency
+                      ctx.fillStyle = "#FFFFFF";
+                      ctx.fillRect(0, 0, width, height);
+                      
+                      // Draw the image on the canvas
+                      ctx.drawImage(img, 0, 0, width, height);
+                      
+                      // Get resized image as data URL with reduced quality
+                      // Make sure we're using the proper MIME type "image/jpeg"
+                      const resizedDataUrl = canvas.toDataURL('image/jpeg', quality);
+                      
+                      // Verify the data URL format
+                      if (!resizedDataUrl.startsWith('data:image/jpeg;base64,')) {
+                        console.error("Invalid data URL format generated");
+                        reject(new Error("Invalid data URL format"));
+                        return;
+                      }
+                      
+                      console.log(`Processed image size: ${resizedDataUrl.length} bytes`);
+                      
+                      // Additional validation for debugging
+                      try {
+                        const base64Part = resizedDataUrl.split('base64,')[1];
+                        if (!base64Part || base64Part.length === 0) {
+                          throw new Error("Empty base64 data");
+                        }
+                        
+                        // Minimal validation - base64 should be divisible by 4
+                        if (base64Part.length % 4 !== 0) {
+                          console.warn("Warning: Base64 length not divisible by 4, might be invalid");
+                        }
+                      } catch (error) {
+                        console.error("Error validating base64 data:", error);
+                      }
+                      
+                      resolve(resizedDataUrl);
+                    };
+                    img.onerror = (e) => {
+                      console.error("Image load error:", e);
+                      reject(new Error("Failed to load image"));
+                    };
+                    img.src = dataUrl;
+                  });
+                };
+                
+                // Fetch the image as data URL
+                const originalDataUrl = await fetchImage(imgSrc);
+                console.log(`Original data URL size: ${originalDataUrl.length} bytes`);
+                
+                // First try with high compression
+                try {
+                  // Try with moderate quality first
+                  photoData = await resizeImage(originalDataUrl, 800, 600, 0.7);
+                  console.log('Successfully resized image with standard settings');
+                  
+                  // If still too large, try more aggressive compression
+                  if (photoData.length > 1000000) { // If over ~1MB
+                    console.log('Image still large, trying more aggressive compression...');
+                    photoData = await resizeImage(originalDataUrl, 640, 480, 0.5);
+                    console.log('Applied more aggressive compression');
+                  }
+                  
+                  // If STILL too large, try maximum compression
+                  if (photoData.length > 500000) { // If over ~500KB
+                    console.log('Image still too large, applying maximum compression...');
+                    photoData = await resizeImage(originalDataUrl, 400, 300, 0.3);
+                    console.log('Applied maximum compression');
+                  }
+                  
+                  // Log the size reduction
+                  const originalSize = originalDataUrl.length;
+                  const newSize = photoData.length;
+                  const reduction = ((originalSize - newSize) / originalSize * 100).toFixed(2);
+                  console.log(`Final image size: ${originalSize} bytes → ${newSize} bytes (${reduction}% reduction)`);
+                } catch (resizeError) {
+                  console.error('Error resizing image, using original:', resizeError);
+                  photoData = originalDataUrl;
+                }
+              } catch (error) {
+                console.error('Error fetching and converting image:', error);
+                // If we can't get the image data, we'll proceed without it
+                photoData = null;
+              }
+            }
+          }
+        }
+      }
+      
+      // Enhanced system prompt with photo context
+      if (hasSelectedPhoto && photoDescription) {
+        systemPrompt = `${systemPrompt}\n\nIMPORTANT: There is a selected photo that should be referenced in your response. The photo description is: "${photoDescription}". Your task is to enhance the text while incorporating relevant details from this photo. Make sure to explicitly reference visual elements from the photo in your response.`;
+      }
+      
+      // Call our OpenAI API route
+      const response = await fetch('/api/openai', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -365,12 +589,15 @@ export default function ProseMirrorEditor({
         body: JSON.stringify({
           systemPrompt,
           userPrompt,
+          includePhoto: hasSelectedPhoto && !!photoData,
+          photoData,
+          photoDescription,
         }),
       });
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: "Unknown error" }));
-        console.error("API route error:", errorData);
+        console.error("OpenAI API route error:", errorData);
         throw new Error(`API error: ${response.status} - ${errorData.error || "Unknown error"}`);
       }
       
@@ -381,15 +608,15 @@ export default function ProseMirrorEditor({
         throw new Error("Invalid API response format");
       }
       
-      console.log("API response received, length:", data.content.length);
+      console.log("OpenAI API response received, length:", data.content.length);
       return data.content;
     } catch (error) {
-      console.error("Error enhancing text with Claude:", error);
+      console.error("Error enhancing text with OpenAI:", error);
       
       // Provide a helpful fallback that tells the user what happened
       toast({
         title: "AI Enhancement Error",
-        description: "There was an error connecting to the AI service. Please try again.",
+        description: "There was an error connecting to the OpenAI service. Please try again.",
         variant: "destructive",
         duration: 5000
       });
@@ -699,7 +926,12 @@ export default function ProseMirrorEditor({
               
               {/* AI Quick Actions */}
 {/* Custom AI menu that won't disappear */}
-              <div className="ai-menu-container">
+              <div className="ai-menu-container flex items-center">
+                {/* AI Model indicator */}
+                <span className="text-xs mr-1 px-1 py-0.5 bg-gray-100 rounded text-gray-600">
+                  GPT-4
+                </span>
+                
                 <Button 
                   size="sm" 
                   variant="ghost" 
@@ -746,6 +978,7 @@ export default function ProseMirrorEditor({
                       const divider = document.createElement('div');
                       divider.className = "border-t border-gray-200 my-1";
                       menuContent.appendChild(divider);
+                      
                       
                       // Add custom prompt input
                       const customPromptContainer = document.createElement('div');

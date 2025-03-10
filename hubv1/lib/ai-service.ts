@@ -1,7 +1,8 @@
 /**
- * AI Service for interacting with Claude API
+ * AI Service for interacting with Claude and OpenAI APIs
  */
 
+// Claude interfaces
 interface ClaudeRequestBody {
   model: string;
   max_tokens: number;
@@ -30,13 +31,55 @@ interface ClaudeResponse {
   };
 }
 
-// Replace with your actual API key and endpoint setup
-const API_URL = 'https://api.anthropic.com/v1/messages';
-let API_KEY = process.env.CLAUDE_API_KEY || '';
+// OpenAI interfaces
+interface OpenAIRequestBody {
+  model: string;
+  messages: {
+    role: 'user' | 'assistant' | 'system';
+    content: string | Array<{
+      type: string;
+      [key: string]: any;
+    }>;
+  }[];
+  max_tokens?: number;
+  temperature?: number;
+}
 
-// Function to set API key programmatically if needed
+interface OpenAIResponse {
+  id: string;
+  object: string;
+  created: number;
+  model: string;
+  choices: {
+    index: number;
+    message: {
+      role: string;
+      content: string;
+    };
+    finish_reason: string;
+  }[];
+  usage: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+  };
+}
+
+// Claude API configuration
+const CLAUDE_API_URL = 'https://api.anthropic.com/v1/messages';
+let CLAUDE_API_KEY = process.env.CLAUDE_API_KEY || '';
+
+// OpenAI API configuration
+const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
+let OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
+
+// Function to set API keys programmatically if needed
 export const setClaudeApiKey = (apiKey: string) => {
-  API_KEY = apiKey;
+  CLAUDE_API_KEY = apiKey;
+};
+
+export const setOpenAIApiKey = (apiKey: string) => {
+  OPENAI_API_KEY = apiKey;
 };
 
 /**
@@ -47,7 +90,7 @@ export const setClaudeApiKey = (apiKey: string) => {
  */
 export const callClaudeAPI = async (systemPrompt: string, userPrompt: string): Promise<string> => {
   try {
-    if (!API_KEY) {
+    if (!CLAUDE_API_KEY) {
       throw new Error('Claude API key not configured');
     }
 
@@ -64,11 +107,11 @@ export const callClaudeAPI = async (systemPrompt: string, userPrompt: string): P
       system: systemPrompt,
     };
 
-    const response = await fetch(API_URL, {
+    const response = await fetch(CLAUDE_API_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': API_KEY,
+        'x-api-key': CLAUDE_API_KEY,
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify(requestBody),
@@ -83,6 +126,56 @@ export const callClaudeAPI = async (systemPrompt: string, userPrompt: string): P
     return data.content[0]?.text || '';
   } catch (error) {
     console.error('Error calling Claude API:', error);
+    throw error;
+  }
+};
+
+/**
+ * Calls the OpenAI API with the given prompts
+ * @param systemPrompt The system prompt to guide OpenAI's behavior
+ * @param userPrompt The user's specific request
+ * @returns The AI-generated text response
+ */
+export const callOpenAIAPI = async (systemPrompt: string, userPrompt: string): Promise<string> => {
+  try {
+    if (!OPENAI_API_KEY) {
+      throw new Error('OpenAI API key not configured');
+    }
+
+    const requestBody: OpenAIRequestBody = {
+      model: 'gpt-4-turbo',
+      messages: [
+        {
+          role: 'system',
+          content: systemPrompt,
+        },
+        {
+          role: 'user',
+          content: userPrompt,
+        },
+      ],
+      max_tokens: 1000,
+      temperature: 0.7,
+    };
+
+    const response = await fetch(OPENAI_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`OpenAI API error: ${response.status} ${errorText}`);
+    }
+
+    const data = await response.json() as OpenAIResponse;
+    return data.choices[0]?.message?.content || '';
+  } catch (error) {
+    console.error('Error calling OpenAI API:', error);
     throw error;
   }
 };

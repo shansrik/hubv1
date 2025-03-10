@@ -315,6 +315,7 @@ export default function PhotoGrid({ filterQuery, selectedPhotos, onSelectPhoto }
                 className={`relative rounded-md overflow-hidden cursor-pointer border ${
                   selectedPhotos.includes(photo.id) ? "border-blue-500 ring-2 ring-blue-300" : "border-gray-200"
                 } group transition-all hover:shadow-md`}
+                data-photo-id={photo.id}
                 onClick={() => onSelectPhoto(photo.id)}
               >
                 <div className="aspect-w-4 aspect-h-3">

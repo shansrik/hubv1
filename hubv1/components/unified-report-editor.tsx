@@ -114,6 +114,7 @@ export default function UnifiedReportEditor() {
     issueDate: "June 1, 2020",
   })
   
+  
   // Page management state
   const [totalPages, setTotalPages] = useState(1)
   const [currentPage, setCurrentPage] = useState(1)
@@ -487,21 +488,258 @@ export default function UnifiedReportEditor() {
     })
   }
 
-  // Handle AI text generation
-  const handleGenerateText = async (selectedText = "") => {
+  // Handle AI text generation with selected photo
+  const handleGenerateText = async (selectedText = "", customPrompt = "") => {
     try {
       setIsGenerating(true)
-      // AI text generation logic here
+      
+      // Check if there are any selected photos to include
+      // First get the photos from the PhotoGrid component
+      const photos = document.querySelectorAll('.photo-grid-container .relative');
+      
+      // Find the selected photo
+      let selectedPhoto = null;
+      if (selectedPhotos.length > 0) {
+        // Look through all photos for the selected one
+        photos.forEach(photoElement => {
+          if (photoElement.getAttribute('data-photo-id') === selectedPhotos[0]) {
+            const imgElement = photoElement.querySelector('img');
+            const nameElement = photoElement.querySelector('h4');
+            const descElement = photoElement.querySelector('p');
+            
+            if (imgElement) {
+              // First create the photo object with original path
+              selectedPhoto = {
+                id: selectedPhotos[0],
+                path: imgElement.src,
+                name: nameElement?.textContent || 'Selected Photo',
+                description: descElement?.textContent || 'No description available'
+              };
+              
+              // Now resize the image before sending to API
+              const resizeImage = (src: string, maxWidth = 800, maxHeight = 600, quality = 0.7): Promise<string> => {
+                return new Promise((resolve, reject) => {
+                  const img = new Image();
+                  img.crossOrigin = "anonymous";
+                  img.onload = () => {
+                    let width = img.width;
+                    let height = img.height;
+                    
+                    console.log(`Original image dimensions: ${width}x${height}`);
+                    
+                    // Calculate new dimensions while maintaining aspect ratio
+                    if (width > maxWidth) {
+                      height = Math.round(height * (maxWidth / width));
+                      width = maxWidth;
+                    }
+                    if (height > maxHeight) {
+                      width = Math.round(width * (maxHeight / height));
+                      height = maxHeight;
+                    }
+                    
+                    console.log(`Resized dimensions: ${width}x${height}`);
+                    
+                    const canvas = document.createElement('canvas');
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    
+                    if (ctx) {
+                      // Draw with white background to handle transparency
+                      ctx.fillStyle = "#FFFFFF";
+                      ctx.fillRect(0, 0, width, height);
+                      
+                      // Draw the image
+                      ctx.drawImage(img, 0, 0, width, height);
+                      
+                      // Get resized image as data URL with specified quality
+                      const dataUrl = canvas.toDataURL('image/jpeg', quality);
+                      
+                      // Verify the data URL format
+                      if (!dataUrl.startsWith('data:image/jpeg;base64,')) {
+                        console.error("Invalid data URL format generated");
+                        reject(new Error("Invalid data URL format"));
+                        return;
+                      }
+                      
+                      console.log(`Processed image size: ${dataUrl.length} bytes`);
+                      
+                      // Additional validation for debugging
+                      try {
+                        const base64Part = dataUrl.split('base64,')[1];
+                        if (!base64Part || base64Part.length === 0) {
+                          throw new Error("Empty base64 data");
+                        }
+                        
+                        // Minimal validation - base64 should be divisible by 4
+                        if (base64Part.length % 4 !== 0) {
+                          console.warn("Warning: Base64 length not divisible by 4, might be invalid");
+                        }
+                      } catch (error) {
+                        console.error("Error validating base64 data:", error);
+                      }
+                      
+                      resolve(dataUrl);
+                    } else {
+                      reject(new Error("Could not get canvas context"));
+                    }
+                  };
+                  
+                  img.onerror = (e) => {
+                    console.error("Image load error:", e);
+                    reject(new Error("Failed to load image"));
+                  };
+                  img.src = src;
+                });
+              };
+              
+              // Store the description for use in the API call
+              const photoDescription = selectedPhoto.description;
+              
+              // We'll immediately use the original image path for now
+              // But also start a separate process to resize the image
+              (async () => {
+                try {
+                  console.log("Starting image optimization process...");
+                  
+                  // First check if we need to resize at all
+                  const needsResize = !selectedPhoto.path.startsWith('data:') || 
+                                     selectedPhoto.path.length > 100000;
+                  
+                  if (needsResize) {
+                    console.log("Resizing image before sending to OpenAI...");
+                    
+                    // Start with standard quality
+                    let resizedDataUrl = await resizeImage(selectedPhoto.path, 800, 600, 0.7);
+                    console.log("First pass resize complete:", 
+                      `Size: ${resizedDataUrl.length} bytes`);
+                    
+                    // If still too large, try more aggressive compression
+                    if (resizedDataUrl.length > 1000000) { // Over ~1MB
+                      console.log("Image still large, applying more aggressive compression...");
+                      resizedDataUrl = await resizeImage(selectedPhoto.path, 640, 480, 0.5);
+                      console.log("Second pass resize complete:", 
+                        `Size: ${resizedDataUrl.length} bytes`);
+                    }
+                    
+                    // If STILL too large, try maximum compression
+                    if (resizedDataUrl.length > 500000) { // Over ~500KB
+                      console.log("Image still too large, applying maximum compression...");
+                      resizedDataUrl = await resizeImage(selectedPhoto.path, 400, 300, 0.3);
+                      console.log("Third pass resize complete:", 
+                        `Size: ${resizedDataUrl.length} bytes`);
+                    }
+                    
+                    // Update the path - this will be used when the API call is made
+                    if (selectedPhoto) {
+                      const originalSize = selectedPhoto.path.length;
+                      selectedPhoto.path = resizedDataUrl;
+                      
+                      const reduction = ((originalSize - resizedDataUrl.length) / originalSize * 100).toFixed(2);
+                      console.log(`Successfully optimized image: ${originalSize} bytes → ${resizedDataUrl.length} bytes (${reduction}% reduction)`);
+                    }
+                  } else {
+                    console.log("Image already optimized, skipping resize");
+                  }
+                } catch (resizeError) {
+                  console.error("Error resizing image:", resizeError);
+                  // Keep the original path if resize fails
+                }
+              })();
+            }
+          }
+        });
+      }
+      
+      let generatedText = "";
+      
+      if (selectedPhoto) {
+        // Give a longer delay to allow image resizing to complete
+        console.log("Waiting for image processing to complete...");
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Check if the image is too large
+        const imageSize = selectedPhoto.path.length;
+        console.log(`Final image size: ${imageSize} bytes`);
+        
+        // Warn if image is very large
+        if (imageSize > 1000000) {
+          console.warn("WARNING: Image is still large (> 1MB), which may cause issues with API limits");
+        }
+        
+        console.log("Sending request to OpenAI API with image:", 
+          selectedPhoto.path.substring(0, 30) + "...");
+        
+        // If we have a selected photo, call the OpenAI API with the photo data
+        const response = await fetch('/api/openai', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            systemPrompt: `You are a professional report writer for property inspection reports. 
+                          Use professional, technical language that is concise and factual.
+                          Reference the image in your response when relevant.`,
+            userPrompt: `${customPrompt || 'Write a technical sentence'} 
+                        about the following image: ${selectedPhoto.description || 'an image of a property element'}.
+                        ${selectedText ? `The current text is: "${selectedText}"` : ''}
+                        The text should be factual, professional, and provide relevant observations about what's shown. Keep it to one sentence.`,
+            includePhoto: true,
+            photoData: selectedPhoto.path,
+          }),
+        });
+        
+        if (!response.ok) {
+          throw new Error(`API error: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        generatedText = data.content;
+      } else {
+        // No photo selected, just use text prompt
+        const response = await fetch('/api/openai', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            systemPrompt: `You are a professional report writer for property inspection reports. 
+                          Use professional, technical language that is concise and factual.`,
+            userPrompt: `${customPrompt || 'Write a detailed technical paragraph'}.
+                        ${selectedText ? `The current text is: "${selectedText}"` : ''}
+                        The text should be factual, professional, and provide relevant observations.`,
+          }),
+        });
+        
+        if (!response.ok) {
+          throw new Error(`API error: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        generatedText = data.content;
+      }
+      
+      // Insert the generated text into the editor
+      // In a real implementation, you would insert this into the active editor
+      console.log("Generated text:", generatedText);
+      
       toast({
-        title: "Text generated",
-        description: "AI-generated text has been inserted into your report.",
+        title: "GPT-4 text generated",
+        description: selectedPhoto 
+          ? "GPT-4-generated text based on the selected photo has been created." 
+          : "GPT-4-generated text has been created.",
+        duration: 3000,
       })
+      
+      return generatedText;
     } catch (error) {
+      console.error("Text generation error:", error);
       toast({
         title: "Generation failed",
         description: "Failed to generate text. Please try again.",
         variant: "destructive",
       })
+      return null;
     } finally {
       setIsGenerating(false)
     }
@@ -604,6 +842,7 @@ export default function UnifiedReportEditor() {
                 <FileDown className="h-4 w-4 mr-1" />
                 Export PDF
               </Button>
+              
             </div>
           </div>
           
@@ -744,24 +983,34 @@ export default function UnifiedReportEditor() {
                       {/* Custom page content - Always show editor with autosave */}
                       {isCustomPage && (
                         <div className="cursor-text min-h-[300px] always-editable-wrapper">
-                          <ProseMirrorEditor
-                            initialContent={customPages[virtualRow.index].content}
-                            onSave={(html) => {
-                              // Update custom page content safely
-                              try {
-                                setCustomPages(prevPages => 
-                                  prevPages.map(page => 
-                                    page.id === customPages[virtualRow.index].id 
-                                      ? { ...page, content: html } 
-                                      : page
+                          <div className="relative">
+                            {/* Indicator when photo is selected */}
+                            {selectedPhotos.length > 0 && (
+                              <div className="absolute top-2 right-2 bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full z-10 flex items-center">
+                                <ImageIcon className="h-3 w-3 mr-1" />
+                                Photo selected for AI
+                              </div>
+                            )}
+                            
+                            <ProseMirrorEditor
+                              initialContent={customPages[virtualRow.index].content}
+                              onSave={(html) => {
+                                // Update custom page content safely
+                                try {
+                                  setCustomPages(prevPages => 
+                                    prevPages.map(page => 
+                                      page.id === customPages[virtualRow.index].id 
+                                        ? { ...page, content: html } 
+                                        : page
+                                    )
                                   )
-                                )
-                              } catch (error) {
-                                console.error("Error updating custom page:", error);
-                              }
-                            }}
-                            alwaysEditable={true}
-                          />
+                                } catch (error) {
+                                  console.error("Error updating custom page:", error);
+                                }
+                              }}
+                              alwaysEditable={true}
+                            />
+                          </div>
                           
                           {/* Custom page images */}
                           {customPages[virtualRow.index].images.length > 0 && (
