@@ -27,6 +27,7 @@ export default function UnifiedReportEditor() {
   const [filterQuery, setFilterQuery] = useState("")
   const [isGenerating, setIsGenerating] = useState(false)
   const [isInsertingPhoto, setIsInsertingPhoto] = useState(false)
+  const [activeHeadingContext, setActiveHeadingContext] = useState<string>("")
   
   // Document state
   const [customPages, setCustomPages] = useState<ReportPage[]>(() => {
@@ -403,6 +404,7 @@ export default function UnifiedReportEditor() {
 
         <PhotoGrid
           filterQuery={filterQuery}
+          headingContext={activeHeadingContext}
           selectedPhotos={selectedPhotos}
           onSelectPhoto={(id, isCtrlPressed = false) => {
             if (selectedPhotos.includes(id)) {
@@ -534,6 +536,7 @@ export default function UnifiedReportEditor() {
                         alwaysEditable={true}
                         selectedPhotoId={selectedPhotos.length > 0 ? selectedPhotos[0] : undefined}
                         onGenerateText={handleGenerateText}
+                        onHeadingChange={(heading) => setActiveHeadingContext(heading)}
                       />
                     </div>
                   </PageRenderer>

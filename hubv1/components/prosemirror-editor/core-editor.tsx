@@ -5,6 +5,7 @@ import Highlight from '@tiptap/extension-highlight'
 import { ProseMirrorEditorProps } from './types'
 import { useEditorSave } from './hooks/use-editor-save'
 import { useEditorKeyboard } from './hooks/use-editor-keyboard'
+import { useEditorHeadingContext } from './hooks/use-editor-heading-context'
 import { EditorBubbleMenu } from './menus/bubble-menu'
 import { FormatMenu } from './menus/format-menu'
 
@@ -18,17 +19,22 @@ export const CoreEditor: React.FC<ProseMirrorEditorProps> = ({
   onCancel,
   alwaysEditable = false,
   selectedPhotoId,
-  onGenerateText
+  onGenerateText,
+  onHeadingChange
 }) => {
   // State management
   
   // References
   const menuButtonRef = useRef<HTMLDivElement>(null)
   
-  // Initialize Tiptap editor with basic extensions
+  // Initialize Tiptap editor with basic extensions and headings
   const editor = useEditor({
     extensions: [
-      StarterKit,
+      StarterKit.configure({
+        heading: {
+          levels: [1, 2, 3]
+        }
+      }),
       Highlight,
     ],
     content: initialContent,
@@ -163,6 +169,16 @@ export const CoreEditor: React.FC<ProseMirrorEditorProps> = ({
       }
     }
   }, [editor, alwaysEditable])
+  
+  // Track heading context and notify parent component when it changes
+  const headingContext = useEditorHeadingContext(editor);
+  
+  // Pass heading context to parent component when it changes
+  useEffect(() => {
+    if (headingContext && onHeadingChange) {
+      onHeadingChange(headingContext);
+    }
+  }, [headingContext, onHeadingChange]);
 
   if (!editor) {
     return (

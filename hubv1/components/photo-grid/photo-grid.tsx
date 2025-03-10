@@ -15,7 +15,7 @@ import {
   generatePhotoId 
 } from './photo-utils'
 
-export default function PhotoGrid({ filterQuery, selectedPhotos, onSelectPhoto }: PhotoGridProps) {
+export default function PhotoGrid({ filterQuery, headingContext, selectedPhotos, onSelectPhoto }: PhotoGridProps) {
   const { toast } = useToast()
   const [photos, setPhotos] = useState<Photo[]>([])
   const [filteredPhotos, setFilteredPhotos] = useState<Photo[]>([])
@@ -43,10 +43,10 @@ export default function PhotoGrid({ filterQuery, selectedPhotos, onSelectPhoto }
     }
   }, [photos, toast])
 
-  // Filter photos based on search query
+  // Filter photos based on search query and heading context
   useEffect(() => {
-    setFilteredPhotos(filterPhotos(photos, filterQuery))
-  }, [filterQuery, photos])
+    setFilteredPhotos(filterPhotos(photos, filterQuery, headingContext))
+  }, [filterQuery, headingContext, photos])
 
   // Handle photo upload
   const handleUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -257,6 +257,14 @@ export default function PhotoGrid({ filterQuery, selectedPhotos, onSelectPhoto }
         </div>
       </div>
       
+      {/* Heading context indicator */}
+      {headingContext && (
+        <div className="mb-3 px-2 py-1.5 bg-blue-50 rounded-md border border-blue-100 text-sm">
+          <div className="font-medium text-blue-800 text-xs mb-0.5">Active section:</div>
+          <div className="text-blue-700 text-xs">{headingContext}</div>
+        </div>
+      )}
+      
       {/* Photo grid */}
       <div className="flex-grow overflow-y-auto">
         <div 
@@ -295,9 +303,18 @@ export default function PhotoGrid({ filterQuery, selectedPhotos, onSelectPhoto }
                   <p className="text-[10px] text-gray-500 line-clamp-2 h-8">
                     {photo.description || "No description"}
                   </p>
+                  
+                  {/* Selection number indicator */}
                   {selectedPhotos.includes(photo.id) && selectedPhotos.length > 1 && (
                     <div className="absolute bottom-1 left-1 bg-blue-500 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center">
                       {selectedPhotos.indexOf(photo.id) + 1}
+                    </div>
+                  )}
+                  
+                  {/* Relevance indicator */}
+                  {headingContext && photo.relevance && photo.relevance > 0 && (
+                    <div className="absolute top-1 left-1 bg-yellow-500 text-white text-[10px] px-1.5 rounded-sm">
+                      {photo.relevance > 3 ? 'High' : photo.relevance > 1 ? 'Med' : 'Low'}
                     </div>
                   )}
                 </div>
