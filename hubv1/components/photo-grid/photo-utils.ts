@@ -95,35 +95,49 @@ export const savePhotosToStorage = (photos: Photo[]): boolean => {
 
 // Calculate photo relevance to a heading context
 export const calculatePhotoRelevance = (photo: Photo, headingContext?: string): number => {
-  if (!headingContext) return 1; // Default relevance
+  if (!headingContext || headingContext.trim() === '') return 1; // Default relevance
   
-  const headingWords = headingContext.toLowerCase().split(/\s+/);
+  const headingLower = headingContext.toLowerCase();
+  const headingWords = headingLower.split(/\s+/).filter(word => word.length > 2);
   let relevanceScore = 0;
   
+  // Skip common words that aren't useful for matching
+  const skipWords = ['the', 'and', 'for', 'with', 'this', 'that', 'from', 'have', 'has'];
+  const filteredHeadingWords = headingWords.filter(word => !skipWords.includes(word));
+  
   // Check photo name
-  headingWords.forEach(word => {
-    if (word.length > 2 && photo.name.toLowerCase().includes(word)) {
+  filteredHeadingWords.forEach(word => {
+    if (photo.name.toLowerCase().includes(word)) {
       relevanceScore += 2;
     }
   });
   
-  // Check photo description
-  headingWords.forEach(word => {
-    if (word.length > 2 && photo.description.toLowerCase().includes(word)) {
+  // Check photo description - add points for each word that matches
+  filteredHeadingWords.forEach(word => {
+    if (photo.description && photo.description.toLowerCase().includes(word)) {
       relevanceScore += 1;
     }
   });
   
-  // Check photo tags
-  if (photo.tags) {
+  // Check photo tags - highest relevance boost
+  if (photo.tags && photo.tags.length > 0) {
     photo.tags.forEach(tag => {
-      if (headingContext.toLowerCase().includes(tag.toLowerCase())) {
-        relevanceScore += 3;
+      // Exact tag match with heading context
+      if (headingLower.includes(tag.toLowerCase())) {
+        relevanceScore += 5;
       }
+      
+      // Partial tag match with individual words
+      filteredHeadingWords.forEach(word => {
+        if (tag.toLowerCase().includes(word) || word.includes(tag.toLowerCase())) {
+          relevanceScore += 3;
+        }
+      });
     });
   }
   
-  return relevanceScore;
+  // Ensure we only return positive relevance scores
+  return Math.max(0, relevanceScore);
 };
 
 // Filter and sort photos based on query and heading context

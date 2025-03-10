@@ -4,7 +4,9 @@ import {
   Bold, 
   Italic, 
   Underline, 
-  Sparkles 
+  Sparkles,
+  ChevronDown,
+  X
 } from 'lucide-react'
 import { Button } from "@/components/ui/button"
 import { BubbleMenuProps } from '../types'
@@ -41,8 +43,8 @@ export const EditorBubbleMenu: React.FC<BubbleMenuProps> = ({
       // Create menu if it doesn't exist
       menu = document.createElement('div')
       menu.id = `ai-menu-${editorId}`
-      menu.className = "absolute right-0 top-8 bg-white rounded-md shadow-lg border border-gray-200 p-2 z-50 ai-menu-dropdown"
-      menu.style.minWidth = "200px"
+      menu.className = "absolute left-0 top-8 bg-white rounded-md shadow-lg border border-gray-200 p-2 z-50 ai-menu-dropdown"
+      menu.style.minWidth = "220px"
       
       // Create the menu items
       const menuContent = document.createElement('div')
@@ -103,6 +105,18 @@ export const EditorBubbleMenu: React.FC<BubbleMenuProps> = ({
           
           setIsGeneratingAI(true)
           
+          // Add loading indicator to the document
+          const editorElement = editor.options.element;
+          const loadingIndicator = document.createElement('div');
+          loadingIndicator.className = 'ai-loading-indicator';
+          loadingIndicator.innerHTML = `
+            <div class="flex items-center gap-2">
+              <div class="ai-loading-spinner"></div>
+              <span class="text-sm font-medium">AI is enhancing your text...</span>
+            </div>
+          `;
+          editorElement.appendChild(loadingIndicator);
+          
           try {
             // Get the selected text
             const { from, to } = editor.state.selection
@@ -124,6 +138,11 @@ export const EditorBubbleMenu: React.FC<BubbleMenuProps> = ({
                 description: "Please select some text to enhance.",
                 variant: "destructive"
               })
+              // Remove loading indicator
+              if (loadingIndicator && loadingIndicator.parentNode) {
+                loadingIndicator.parentNode.removeChild(loadingIndicator);
+              }
+              setIsGeneratingAI(false)
               return
             }
             
@@ -179,24 +198,53 @@ export const EditorBubbleMenu: React.FC<BubbleMenuProps> = ({
               return;
             }
             
-            // Replace the text with enhanced version
+            // Replace the text with enhanced version and highlight it
             if (enhancedText && enhancedText !== text) {
               if (isSelection) {
+                // Store the current selection positions for highlighting
+                const selectionFrom = from;
+                const selectionTo = to;
+                
                 editor
                   .chain()
                   .focus()
                   .deleteRange({ from, to })
-                  .insertContent(enhancedText)
+                  .insertContent(`<span class="ai-generated-text">${enhancedText}</span>`)
                   .run()
+                  
+                // Select the newly inserted text briefly for visual feedback
+                const insertedLength = enhancedText.length;
+                setTimeout(() => {
+                  editor.commands.setTextSelection({ 
+                    from: selectionFrom, 
+                    to: selectionFrom + insertedLength 
+                  });
+                  
+                  // Then return to normal cursor after a moment
+                  setTimeout(() => {
+                    editor.commands.setTextSelection(selectionFrom + insertedLength);
+                  }, 600);
+                }, 100);
               } else {
-                // Replace the current paragraph
+                // Replace the current paragraph with highlighted AI content
                 editor
                   .chain()
                   .focus()
                   .selectParentNode()
                   .deleteSelection()
-                  .insertContent(`<p>${enhancedText}</p>`)
+                  .insertContent(`<p><span class="ai-generated-text">${enhancedText}</span></p>`)
                   .run()
+                  
+                // Briefly select the paragraph to highlight the change
+                setTimeout(() => {
+                  editor.commands.selectParentNode();
+                  
+                  // Then deselect after a moment
+                  setTimeout(() => {
+                    const { to } = editor.state.selection;
+                    editor.commands.setTextSelection(to);
+                  }, 600);
+                }, 100);
               }
               
               // Show success message
@@ -215,6 +263,10 @@ export const EditorBubbleMenu: React.FC<BubbleMenuProps> = ({
             })
           } finally {
             setIsGeneratingAI(false)
+            // Remove the loading indicator
+            if (loadingIndicator && loadingIndicator.parentNode) {
+              loadingIndicator.parentNode.removeChild(loadingIndicator);
+            }
           }
           
           // Hide menu
@@ -222,7 +274,7 @@ export const EditorBubbleMenu: React.FC<BubbleMenuProps> = ({
         })
       })
       
-      // Special handling for the input field
+      // Special handling for the custom prompt input field in the dropdown menu
       const inputField = document.getElementById(`custom-prompt-${editorId}`)
       if (inputField) {
         // Prevent blur when clicking in the input
@@ -235,7 +287,7 @@ export const EditorBubbleMenu: React.FC<BubbleMenuProps> = ({
           e.stopPropagation()
         })
         
-        // Handle enter key in the input field
+        // Handle enter key in the dropdown's input field
         inputField.addEventListener('keydown', async (e) => {
           if (e.key === 'Enter') {
             e.preventDefault()
@@ -245,6 +297,16 @@ export const EditorBubbleMenu: React.FC<BubbleMenuProps> = ({
               toast({
                 title: "No prompt provided",
                 description: "Please enter a custom instruction.",
+                variant: "destructive"
+              })
+              return
+            }
+            
+            // The rest of the functionality is now handled by the onGenerateText prop
+            if (!onGenerateText) {
+              toast({
+                title: "Enhancement unavailable",
+                description: "Text enhancement is not available.",
                 variant: "destructive"
               })
               return
@@ -273,22 +335,41 @@ export const EditorBubbleMenu: React.FC<BubbleMenuProps> = ({
                   description: "Please select some text to enhance.",
                   variant: "destructive"
                 })
+                setIsGeneratingAI(false)
                 return
               }
               
-              // Enhance text with AI
-              const enhancedText = await enhanceTextWithAI('custom', text, customPrompt)
+              // Generate text with AI
+              const enhancedText = await onGenerateText(text, customPrompt)
               
-              // Replace the text with enhanced version
+              // Replace the text with enhanced version and apply highlight effect
               if (enhancedText && enhancedText !== text) {
                 if (isSelection) {
+                  // Store positions for highlighting
+                  const selectionFrom = from;
+                  
                   editor
                     .chain()
                     .focus()
                     .deleteRange({ from, to })
                     .insertContent(enhancedText)
                     .run()
+                    
+                  // Apply highlight effect to the inserted text
+                  const insertionEndPos = selectionFrom + enhancedText.length;
+                  editor.commands.highlightText(selectionFrom, insertionEndPos)
+                  
+                  // Briefly select the text
+                  setTimeout(() => {
+                    editor.commands.setTextSelection({ 
+                      from: selectionFrom, 
+                      to: selectionFrom + enhancedText.length 
+                    });
+                  }, 50);
                 } else {
+                  // Get paragraph position info before replacing
+                  const nodePos = editor.state.selection.$from.start();
+                  
                   // Replace the current paragraph
                   editor
                     .chain()
@@ -297,15 +378,21 @@ export const EditorBubbleMenu: React.FC<BubbleMenuProps> = ({
                     .deleteSelection()
                     .insertContent(`<p>${enhancedText}</p>`)
                     .run()
+                    
+                  // Apply highlight effect
+                  const paragraphEndPos = nodePos + enhancedText.length;
+                  editor.commands.highlightText(nodePos, paragraphEndPos)
+                  
+                  // Select the paragraph briefly
+                  setTimeout(() => {
+                    editor.commands.selectParentNode();
+                  }, 50);
                 }
                 
                 // Show success message
-                const selectedPhoto = findSelectedPhoto()
-                const hasPhoto = !!selectedPhoto
-                
                 toast({
                   title: "AI Enhancement Applied",
-                  description: getEnhancementToastMessage('custom', hasPhoto),
+                  description: hasSelectedPhoto ? "Enhancement with photo context applied" : "Custom enhancement applied",
                   duration: 3000
                 })
               }
@@ -329,11 +416,14 @@ export const EditorBubbleMenu: React.FC<BubbleMenuProps> = ({
       document.body.appendChild(menu)
     }
     
-    // Position the menu relative to the button
+    // Position the menu relative to the AI dropdown button
     const buttonRect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+    const aiButtonContainer = document.querySelector('.ai-menu-container')
+    const aiButtonRect = aiButtonContainer?.getBoundingClientRect() || buttonRect
+    
     menu.style.position = 'fixed'
-    menu.style.top = `${buttonRect.bottom + 5}px`
-    menu.style.left = `${buttonRect.left}px`
+    menu.style.top = `${aiButtonRect.bottom + 5}px`
+    menu.style.left = `${aiButtonRect.left}px`
     
     // Toggle visibility
     const isHidden = menu.classList.contains('hidden')
@@ -352,7 +442,39 @@ export const EditorBubbleMenu: React.FC<BubbleMenuProps> = ({
   return (
     <TiptapBubbleMenu 
       editor={editor} 
-      tippyOptions={{ duration: 100 }}
+      tippyOptions={{ 
+        duration: 100,
+        // Keep menu visible when clicking in inputs
+        hideOnClick: false, 
+        // Prevent menu from disappearing when input is focused
+        trigger: 'manual', 
+        // Make the menu stick around longer
+        onHide: (instance) => {
+          // Check if we're focused in the AI input field
+          const activeElement = document.activeElement;
+          const isInputActive = activeElement?.id?.includes('prompt-input');
+          
+          // If we're in an input field, prevent hiding
+          if (isInputActive) {
+            // Delay briefly then show again if selection still exists
+            setTimeout(() => {
+              const { from, to } = editor.state.selection;
+              if (from !== to) {
+                instance.show();
+              }
+            }, 10);
+          }
+        }
+      }}
+      // Force menu to show with any text selection
+      shouldShow={({ editor }) => {
+        const { from, to } = editor.state.selection;
+        const activeElement = document.activeElement;
+        const isInputActive = activeElement?.id?.includes('prompt-input');
+        
+        // Show bubble menu when text is selected or when we're in the AI input
+        return from !== to || isInputActive;
+      }}
     >
       <div className="bg-white rounded-md shadow-lg border border-gray-200 p-1 flex items-center gap-1">
         <Button 
@@ -395,29 +517,277 @@ export const EditorBubbleMenu: React.FC<BubbleMenuProps> = ({
         
         {/* AI enhancement menu */}
         <div className="ai-menu-container flex items-center">
-          {/* AI Model indicator */}
-          <span className="text-xs mr-1 px-1 py-0.5 bg-gray-100 rounded text-gray-600">
-            AI
-          </span>
-          
-          <Button 
-            size="sm" 
-            variant="ghost" 
-            className="h-7 px-1 text-yellow-500"
-            disabled={isGeneratingAI}
-            onMouseDown={handleAIMenuClick}
-          >
-            <Sparkles className="h-3.5 w-3.5 mr-1" />
-            <span className="text-xs">AI</span>
-          </Button>
+          <div className="flex items-center bg-white border border-gray-200 rounded-md">
+            <Button 
+              size="sm" 
+              variant="ghost" 
+              data-ai-dropdown-id={editor.options.element.getAttribute('data-editor-id') || Math.random().toString(36).substring(2, 9)}
+              className="h-7 w-7 p-0 rounded-l-md rounded-r-none"
+              disabled={isGeneratingAI}
+              onMouseDown={(e) => {
+                // First store the current selection
+                const { from, to } = editor.state.selection;
+                const editorId = editor.options.element.getAttribute('data-editor-id') || 
+                                Math.random().toString(36).substring(2, 9);
+                const promptInput = document.getElementById(`prompt-input-${editorId}`) as HTMLInputElement;
+                
+                if (promptInput && from !== to) {
+                  promptInput.setAttribute('data-selection-from', from.toString());
+                  promptInput.setAttribute('data-selection-to', to.toString());
+                }
+                
+                // Then handle the AI menu click
+                handleAIMenuClick(e);
+                
+                // Prevent the default to maintain selection
+                e.preventDefault();
+              }}
+            >
+              <ChevronDown className="h-3.5 w-3.5" />
+            </Button>
+            
+            <input
+              id={`prompt-input-${editor.options.element.getAttribute('data-editor-id') || Math.random().toString(36).substring(2, 9)}`}
+              type="text"
+              className="h-7 border-0 border-l border-r border-gray-200 px-2 text-xs w-32 focus:outline-none"
+              placeholder="Type AI instruction..."
+              // Prevent default mouse behavior to maintain editor selection
+              onMouseDown={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                // Focus the input but don't let it affect the editor selection
+                e.currentTarget.focus();
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+              }}
+              // Maintain selection during focus
+              onFocus={(e) => {
+                // Store current editor selection in a data attribute
+                const { from, to } = editor.state.selection;
+                e.currentTarget.setAttribute('data-selection-from', from.toString());
+                e.currentTarget.setAttribute('data-selection-to', to.toString());
+              }}
+              // Handle input without losing editor selection
+              onInput={(e) => {
+                // Ensure the editor selection is maintained during typing
+                const from = parseInt(e.currentTarget.getAttribute('data-selection-from') || '0');
+                const to = parseInt(e.currentTarget.getAttribute('data-selection-to') || '0');
+                
+                if (from && to && from !== to) {
+                  // Restore selection if it was lost
+                  const currentSelection = editor.state.selection;
+                  if (currentSelection.from !== from || currentSelection.to !== to) {
+                    editor.commands.setTextSelection({ from, to });
+                  }
+                }
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  // Trigger the generate action directly
+                  const applyButton = e.currentTarget.parentElement?.querySelector('[data-generate-ai]') as HTMLButtonElement;
+                  if (applyButton) {
+                    applyButton.click();
+                  }
+                } else if (e.key === 'Escape') {
+                  // Return focus to editor on escape
+                  editor.commands.focus();
+                }
+              }}
+            />
+            
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 w-7 rounded-l-none rounded-r-none border-r border-gray-200"
+              onMouseDown={(e) => {
+                // Prevent losing selection
+                e.preventDefault();
+                e.stopPropagation();
+                
+                // Clear the input
+                const editorId = editor.options.element.getAttribute('data-editor-id') || 
+                                 Math.random().toString(36).substring(2, 9)
+                const promptInput = document.getElementById(`prompt-input-${editorId}`) as HTMLInputElement
+                if (promptInput) {
+                  promptInput.value = ''
+                  
+                  // Refocus input to maintain bubble menu
+                  promptInput.focus();
+                  
+                  // Re-apply stored selection if it exists
+                  const from = parseInt(promptInput.getAttribute('data-selection-from') || '0');
+                  const to = parseInt(promptInput.getAttribute('data-selection-to') || '0');
+                  
+                  if (from && to && from !== to) {
+                    editor.commands.setTextSelection({ from, to });
+                  }
+                }
+              }}
+            >
+              <X className="h-3 w-3" />
+            </Button>
+            
+            <Button 
+              size="sm" 
+              variant="ghost" 
+              data-generate-ai="true"
+              className="h-7 px-2 text-yellow-500 rounded-l-none rounded-r-md"
+              disabled={isGeneratingAI}
+              onMouseDown={(e) => {
+                // Prevent default to maintain selection
+                e.preventDefault();
+                e.stopPropagation();
+                
+                // Get selected text
+                const { from, to } = editor.state.selection
+                const isSelection = from !== to
+                let text = ''
+                
+                if (isSelection) {
+                  text = editor.state.doc.textBetween(from, to)
+                } else {
+                  // Get current paragraph text if nothing selected
+                  const node = editor.state.selection.$from.node()
+                  text = node.textContent
+                }
+                
+                if (!text) {
+                  toast({
+                    title: "No text selected",
+                    description: "Please select some text to enhance.",
+                    variant: "destructive"
+                  })
+                  return
+                }
+                
+                // Save selection info for later restoration
+                const selectionFrom = from;
+                const selectionTo = to;
+                
+                // Find the prompt input in the DOM
+                const editorId = editor.options.element.getAttribute('data-editor-id') || 
+                                 Math.random().toString(36).substring(2, 9)
+                const promptInput = document.getElementById(`prompt-input-${editorId}`) as HTMLInputElement
+                
+                if (promptInput && promptInput.value) {
+                  // Apply the prompt
+                  if (onGenerateText) {
+                    setIsGeneratingAI(true)
+                    
+                    const customPrompt = promptInput.value;
+                    
+                    // Store the current selection
+                    if (from !== to) {
+                      promptInput.setAttribute('data-selection-from', from.toString());
+                      promptInput.setAttribute('data-selection-to', to.toString());
+                    }
+                    
+                    onGenerateText(text, customPrompt).then(enhancedText => {
+                      if (enhancedText && enhancedText !== text) {
+                        // Apply the enhanced text
+                        if (isSelection) {
+                          // Try to restore the original selection first
+                          editor.commands.setTextSelection({ from: selectionFrom, to: selectionTo });
+                          
+                          // Insert the text without wrapping it in a span
+                          editor.chain()
+                            .focus()
+                            .deleteRange({ from: selectionFrom, to: selectionTo })
+                            .insertContent(enhancedText)
+                            .run()
+                            
+                          // Record insertion position for later selection
+                          const insertionPos = selectionFrom;
+                          const insertionEndPos = insertionPos + enhancedText.length;
+                          
+                          // Apply the temporary highlight effect
+                          editor.commands.highlightText(insertionPos, insertionEndPos);
+                          
+                          // Select the inserted text briefly for user feedback
+                          setTimeout(() => {
+                            editor.commands.setTextSelection({ 
+                              from: insertionPos, 
+                              to: insertionEndPos 
+                            });
+                            
+                            // Then deselect after a moment to show normal cursor
+                            setTimeout(() => {
+                              editor.commands.setTextSelection(insertionEndPos);
+                            }, 600);
+                          }, 100);
+                        } else {
+                          // Get the node position info before replacing
+                          const nodePos = editor.state.selection.$from.start();
+                          
+                          // Replace the entire paragraph without the span wrapper
+                          editor.chain()
+                            .focus()
+                            .selectParentNode()
+                            .deleteSelection()
+                            .insertContent(`<p>${enhancedText}</p>`)
+                            .run()
+                            
+                          // Apply the temporary highlight to the new paragraph content
+                          const paragraphEndPos = nodePos + enhancedText.length;
+                          editor.commands.highlightText(nodePos, paragraphEndPos)
+                            
+                          // Select the paragraph briefly to highlight it
+                          setTimeout(() => {
+                            editor.commands.selectParentNode();
+                            
+                            // Then deselect after a moment
+                            setTimeout(() => {
+                              const { to } = editor.state.selection;
+                              editor.commands.setTextSelection(to);
+                            }, 600);
+                          }, 100);
+                        }
+                        
+                        // Show success toast
+                        toast({
+                          title: "AI Enhancement Applied",
+                          description: "Text enhanced using your custom prompt",
+                          duration: 3000
+                        })
+                      }
+                    }).catch(error => {
+                      toast({
+                        title: "Enhancement failed",
+                        description: "Failed to enhance text. Please try again.",
+                        variant: "destructive"
+                      })
+                    }).finally(() => {
+                      setIsGeneratingAI(false)
+                    })
+                  }
+                } else {
+                  // If no prompt, show the menu with options
+                  const menuEvent = new MouseEvent('mousedown', {
+                    bubbles: true,
+                    cancelable: true
+                  })
+                  
+                  // Find the dropdown button and simulate click
+                  const dropdownBtn = document.querySelector(`[data-ai-dropdown-id="${editorId}"]`)
+                  if (dropdownBtn) {
+                    dropdownBtn.dispatchEvent(menuEvent)
+                  }
+                }
+              }}
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+            </Button>
+          </div>
         </div>
       </div>
       
-      {/* AI generation overlay */}
+      {/* Enhanced AI generation overlay with spinner */}
       {isGeneratingAI && (
         <div className="absolute inset-0 bg-white/80 flex items-center justify-center z-10">
           <div className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-yellow-500 animate-pulse" />
+            <div className="ai-loading-spinner"></div>
             <span className="text-sm font-medium">AI is enhancing your text...</span>
           </div>
         </div>

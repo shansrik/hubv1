@@ -74,7 +74,7 @@ export default function PhotoGrid({ filterQuery, headingContext, selectedPhotos,
             id: generatePhotoId(),
             path: e.target.result as string,
             name: file.name,
-            description: "", // Empty description initially
+            tags: [], // Empty tags array initially
             dataUrl: e.target.result as string,
           }
           
@@ -123,15 +123,15 @@ export default function PhotoGrid({ filterQuery, headingContext, selectedPhotos,
     })
   }
 
-  // Generate AI descriptions for photos using API
-  const generateDescriptions = async () => {
-    // Find photos without descriptions
-    const photosWithoutDescriptions = photos.filter(photo => !photo.description);
+  // Generate AI tags for photos using API
+  const generateTags = async () => {
+    // Find photos without tags or with empty tags
+    const photosWithoutTags = photos.filter(photo => !photo.tags || photo.tags.length === 0);
     
-    if (photosWithoutDescriptions.length === 0) {
+    if (photosWithoutTags.length === 0) {
       toast({
         title: "No Action Needed",
-        description: "All photos already have descriptions"
+        description: "All photos already have tags"
       })
       return
     }
@@ -142,13 +142,13 @@ export default function PhotoGrid({ filterQuery, headingContext, selectedPhotos,
       // Create a copy of photos to update
       const updatedPhotos = [...photos]
       
-      // Process each photo without a description
-      for (const photo of photosWithoutDescriptions) {
+      // Process each photo without tags
+      for (const photo of photosWithoutTags) {
         // Get the photo data - either dataUrl or path
         const imageData = photo.dataUrl || photo.path
         
         try {
-          // Call our image description API
+          // Call our image tagging API
           const response = await fetch('/api/image-description', {
             method: 'POST',
             headers: {
@@ -156,10 +156,8 @@ export default function PhotoGrid({ filterQuery, headingContext, selectedPhotos,
             },
             body: JSON.stringify({
               imageData,
-              // Randomly choose a description type for variety
-              promptType: ['default', 'detailed', 'technical', 'simple'][
-                Math.floor(Math.random() * 4)
-              ]
+              headingContext: headingContext || '',
+              documentType: 'property report'
             }),
           })
           
@@ -172,30 +170,30 @@ export default function PhotoGrid({ filterQuery, headingContext, selectedPhotos,
           // Find photo index
           const index = updatedPhotos.findIndex(p => p.id === photo.id)
           if (index !== -1) {
-            // Update the photo with the AI-generated description
+            // Update the photo with the AI-generated tags
             updatedPhotos[index] = {
               ...updatedPhotos[index],
-              description: `${data.description} (AI-generated)`
+              tags: data.tags || []
             }
           }
         } catch (photoError) {
-          console.error(`Error generating description for photo ${photo.id}:`, photoError)
+          console.error(`Error generating tags for photo ${photo.id}:`, photoError)
           // Continue with next photo even if this one fails
         }
       }
       
-      // Update the state with all the new descriptions
+      // Update the state with all the new tags
       setPhotos(updatedPhotos)
       
       toast({
-        title: "Descriptions Generated",
-        description: `Added descriptions to ${photosWithoutDescriptions.length} photos`
+        title: "Tags Generated",
+        description: `Added tags to ${photosWithoutTags.length} photos`
       })
     } catch (error) {
-      console.error("Error generating descriptions:", error)
+      console.error("Error generating tags:", error)
       toast({
         title: "Generation Failed",
-        description: "Could not generate some photo descriptions",
+        description: "Could not generate tags for some photos",
         variant: "destructive"
       })
     } finally {
@@ -233,7 +231,7 @@ export default function PhotoGrid({ filterQuery, headingContext, selectedPhotos,
           <Button
             size="sm"
             variant="outline"
-            onClick={generateDescriptions}
+            onClick={generateTags}
             disabled={isGeneratingDescriptions}
             className="text-xs"
           >
@@ -242,7 +240,7 @@ export default function PhotoGrid({ filterQuery, headingContext, selectedPhotos,
             ) : (
               <Search className="h-3.5 w-3.5 mr-1" />
             )}
-            Generate Descriptions
+            Generate Tags
           </Button>
         </div>
         
@@ -299,9 +297,22 @@ export default function PhotoGrid({ filterQuery, headingContext, selectedPhotos,
                 </div>
                 
                 <div className="p-1.5 bg-white">
-                  <h4 className="text-xs font-medium truncate">{photo.name}</h4>
-                  <p className="text-[10px] text-gray-500 line-clamp-2 h-8">
-                    {photo.description || "No description"}
+                  {/* Tags display - more prominent */}
+                  <div className="flex flex-wrap gap-1 mb-1 max-h-8 overflow-hidden">
+                    {photo.tags && photo.tags.length > 0 ? (
+                      photo.tags.map((tag, idx) => (
+                        <span key={idx} className="px-1.5 py-0.5 bg-gray-100 rounded-sm text-[9px] text-gray-700 whitespace-nowrap">
+                          {tag}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-[10px] text-gray-400">No tags</span>
+                    )}
+                  </div>
+                  
+                  {/* File name - smaller and less prominent */}
+                  <p className="text-[9px] text-gray-400 truncate mt-1" title={photo.name}>
+                    {photo.name}
                   </p>
                   
                   {/* Selection number indicator */}

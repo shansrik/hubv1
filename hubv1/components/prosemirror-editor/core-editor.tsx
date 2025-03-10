@@ -2,12 +2,79 @@ import React, { useState, useEffect, useRef } from 'react'
 import { useEditor, EditorContent, Extension } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Highlight from '@tiptap/extension-highlight'
+import { Plugin, PluginKey } from 'prosemirror-state'
+import { Decoration, DecorationSet } from 'prosemirror-view'
 import { ProseMirrorEditorProps } from './types'
 import { useEditorSave } from './hooks/use-editor-save'
 import { useEditorKeyboard } from './hooks/use-editor-keyboard'
 import { useEditorHeadingContext } from './hooks/use-editor-heading-context'
 import { EditorBubbleMenu } from './menus/bubble-menu'
 import { FormatMenu } from './menus/format-menu'
+
+// Define a custom extension for temporary text highlighting
+const TemporaryHighlight = Extension.create({
+  name: 'temporaryHighlight',
+  
+  addOptions() {
+    return {
+      highlightClass: 'ai-highlight-effect',
+      duration: 2000, // Duration in milliseconds
+    }
+  },
+  
+  addStorage() {
+    return {
+      decorations: DecorationSet.empty,
+      timeout: null as NodeJS.Timeout | null,
+    }
+  },
+  
+  addProseMirrorPlugins() {
+    const pluginKey = new PluginKey('temporaryHighlight')
+    
+    return [
+      new Plugin({
+        key: pluginKey,
+        props: {
+          decorations: state => {
+            return this.storage.decorations
+          },
+        },
+      }),
+    ]
+  },
+  
+  // Add methods to the extension
+  addCommands() {
+    return {
+      highlightText: (from: number, to: number) => ({ editor }) => {
+        // Clear any existing timeout
+        if (this.storage.timeout) {
+          clearTimeout(this.storage.timeout)
+        }
+        
+        // Create a decoration for the selected text
+        const decoration = Decoration.inline(from, to, {
+          class: this.options.highlightClass,
+        })
+        
+        // Set the decoration in the editor
+        this.storage.decorations = DecorationSet.create(editor.state.doc, [decoration])
+        
+        // Force a state update to show the decoration
+        editor.view.dispatch(editor.state.tr)
+        
+        // Set a timeout to clear the decoration after the specified duration
+        this.storage.timeout = setTimeout(() => {
+          this.storage.decorations = DecorationSet.empty
+          editor.view.dispatch(editor.state.tr)
+        }, this.options.duration)
+        
+        return true
+      },
+    }
+  },
+})
 
 /**
  * Core ProseMirror editor component
@@ -36,6 +103,7 @@ export const CoreEditor: React.FC<ProseMirrorEditorProps> = ({
         }
       }),
       Highlight,
+      TemporaryHighlight,
     ],
     content: initialContent,
     autofocus: 'end',

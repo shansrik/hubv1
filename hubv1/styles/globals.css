@@ -91,21 +91,21 @@
 }
 
 .ProseMirror h1 {
-  font-size: 2em;
+  font-size: 13pt;
   font-weight: bold;
-  margin: 1em 0 0.5em;
+  margin: 0.7em 0 0.3em;
 }
 
 .ProseMirror h2 {
-  font-size: 1.75em;
+  font-size: 12pt;
   font-weight: bold;
-  margin: 1em 0 0.5em;
+  margin: 0.6em 0 0.3em;
 }
 
 .ProseMirror h3 {
-  font-size: 1.5em;
+  font-size: 11pt;
   font-weight: bold;
-  margin: 1em 0 0.5em;
+  margin: 0.5em 0 0.3em;
 }
 
 .ProseMirror ul {
@@ -148,7 +148,9 @@
 }
 
 .ProseMirror p {
+  font-size: 11pt;
   margin: 0.5em 0;
+  line-height: 1.5;
 }
 
 .ProseMirror img {
@@ -190,4 +192,115 @@
   pointer-events: none;
   height: 0;
   float: left;
+}
+
+/* AI Text enhancement styles */
+@keyframes pulse-highlight {
+  0% { background-color: rgba(250, 204, 21, 0.4); }
+  50% { background-color: rgba(250, 204, 21, 0.2); }
+  100% { background-color: transparent; }
+}
+
+/* Used for the inline decoration effect */
+.ai-highlight-effect {
+  background-color: rgba(250, 204, 21, 0.4);
+  animation: pulse-highlight 2s ease-out forwards;
+  border-radius: 2px;
+  padding: 1px 0;
+}
+
+.ai-loading-indicator {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  pointer-events: none;
+}
+
+.ai-loading-spinner {
+  display: inline-block;
+  width: 1.5rem;
+  height: 1.5rem;
+  margin-right: 0.5rem;
+  border: 2px solid rgba(250, 204, 21, 0.3);
+  border-radius: 50%;
+  border-top-color: rgba(250, 204, 21, 1);
+  animation: ai-spinner 0.8s linear infinite;
+}
+
+@keyframes ai-spinner {
+  to { transform: rotate(360deg); }
+}
+
+/* PDF Export styles */
+@media print {
+  /* Hide interface elements */
+  button,
+  [role="button"],
+  .floating-menu,
+  .bubble-menu,
+  .tippy-box {
+    display: none !important;
+  }
+  
+  /* Basic page break rules */
+  .pdf-page {
+    page-break-after: always !important;
+    break-after: page !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    display: block !important;
+    position: relative !important;
+    height: 11in !important;
+    width: 8.5in !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  
+  /* PDF-specific typography */
+  .pdf-export-container p {
+    font-size: 11pt !important;
+    line-height: 1.5 !important;
+    margin: 0.5em 0 !important;
+  }
+  
+  .pdf-export-container h1 {
+    font-size: 13pt !important;
+    font-weight: bold !important;
+    margin: 0.7em 0 0.3em !important;
+  }
+  
+  .pdf-export-container h2 {
+    font-size: 12pt !important;
+    font-weight: bold !important;
+    margin: 0.6em 0 0.3em !important;
+  }
+  
+  /* Force all page containers to be block-level with proper page breaks */
+  .page-container {
+    display: block !important;
+    position: relative !important;
+    page-break-after: always !important;
+    break-after: page !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    margin-bottom: 0.5in !important;
+  }
+  
+  /* Container for content within each page */
+  .content-container {
+    overflow: hidden !important;
+    position: relative !important;
+  }
+  
+  /* Critical to remove transforms from virtual list - major cause of PDF issues */
+  .pdf-export-container * {
+    transform: none !important;
+  }
 }

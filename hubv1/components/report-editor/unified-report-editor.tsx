@@ -11,7 +11,7 @@ import {
 import PhotoGrid from "@/components/photo-grid/photo-grid"
 import { useToast } from "@/components/ui/use-toast"
 import { ReportPage, ReportHeader, CompanyLogo, PAGE_DIMENSIONS } from "./types"
-import { exportToPDF } from "@/lib/utils"
+import { exportToPDF } from "@/lib/pdf-utils"
 import ProseMirrorEditor from "@/components/prosemirror-editor/index"
 import { Button } from "@/components/ui/button"
 import { useVirtualizer } from "@tanstack/react-virtual"
@@ -28,6 +28,11 @@ export default function UnifiedReportEditor() {
   const [isGenerating, setIsGenerating] = useState(false)
   const [isInsertingPhoto, setIsInsertingPhoto] = useState(false)
   const [activeHeadingContext, setActiveHeadingContext] = useState<string>("")
+  
+  // Log when heading context changes for debugging
+  useEffect(() => {
+    console.log("Active heading context in unified editor:", activeHeadingContext);
+  }, [activeHeadingContext]);
   
   // Document state
   const [customPages, setCustomPages] = useState<ReportPage[]>(() => {
@@ -536,7 +541,13 @@ export default function UnifiedReportEditor() {
                         alwaysEditable={true}
                         selectedPhotoId={selectedPhotos.length > 0 ? selectedPhotos[0] : undefined}
                         onGenerateText={handleGenerateText}
-                        onHeadingChange={(heading) => setActiveHeadingContext(heading)}
+                        onHeadingChange={(heading) => {
+                          // Only update if we have an actual heading
+                          if (heading && heading.trim() !== '') {
+                            console.log(`Setting active heading context: "${heading}"`);
+                            setActiveHeadingContext(heading);
+                          }
+                        }}
                       />
                     </div>
                   </PageRenderer>

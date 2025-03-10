@@ -26,33 +26,36 @@ export default function PageRenderer({
 
   return (
     <div 
-      className="mx-auto bg-white shadow-md"
+      className="mx-auto bg-white shadow-md pdf-page"
       style={{
         width: `${PAGE_DIMENSIONS.WIDTH_PX}px`,
         height: `${PAGE_DIMENSIONS.HEIGHT_PX}px`,
         position: 'relative',
-        overflow: 'hidden'
+        overflow: 'hidden',
+        pageBreakInside: 'avoid',
+        breakInside: 'avoid',
+        display: 'block'
       }}
       data-page-id={page.id}
     >
-      {/* Header */}
-      <div className="absolute" style={{ 
-        top: `${PAGE_DIMENSIONS.MARGIN_PX}px`, 
+      {/* Compact Header */}
+      <div className="absolute pdf-header" style={{ 
+        top: `${PAGE_DIMENSIONS.MARGIN_PX * 0.3}px`, 
         left: `${PAGE_DIMENSIONS.MARGIN_PX}px`, 
         right: `${PAGE_DIMENSIONS.MARGIN_PX}px` 
       }}>
         <div className="flex justify-between items-start">
           <div>
-            <div className="text-red-600 font-bold">{header.companyName}</div>
-            <div>{header.documentTitle}</div>
+            <div className="text-red-600 font-bold text-sm">{header.companyName}</div>
+            <div className="text-xs">{header.documentTitle}</div>
           </div>
           <div>
             {logo && (
               <Image
                 src={logo.url}
                 alt="Company Logo"
-                width={logo.width}
-                height={logo.height}
+                width={logo.width * 0.8}
+                height={logo.height * 0.8}
                 priority
               />
             )}
@@ -60,17 +63,25 @@ export default function PageRenderer({
         </div>
       </div>
 
-      {/* Page content - adjusted to account for header space */}
+      {/* Page content - adjusted for compact header and more content space */}
       <div 
-        className="absolute overflow-hidden"
+        className="absolute overflow-hidden content-container"
         style={{ 
-          top: `${PAGE_DIMENSIONS.MARGIN_PX * 2}px`, 
+          top: `${PAGE_DIMENSIONS.MARGIN_PX * 0.8}px`, // Reduced top margin for more content space 
           left: `${PAGE_DIMENSIONS.MARGIN_PX}px`, 
           right: `${PAGE_DIMENSIONS.MARGIN_PX}px`, 
-          bottom: `${PAGE_DIMENSIONS.MARGIN_PX}px` 
+          bottom: `${PAGE_DIMENSIONS.MARGIN_PX + 20}px`,  // Adjusted for footer
+          maxHeight: `${PAGE_DIMENSIONS.HEIGHT_PX - (PAGE_DIMENSIONS.MARGIN_PX + 68)}px` // More content space
         }}
       >
-        <div ref={contentRef} className="cursor-text min-h-[300px] always-editable-wrapper">
+        <div 
+          ref={contentRef} 
+          className="cursor-text min-h-[300px] always-editable-wrapper"
+          style={{
+            pageBreakInside: 'avoid',
+            breakInside: 'avoid'
+          }}
+        >
           {children}
         </div>
         
@@ -96,17 +107,16 @@ export default function PageRenderer({
         )}
       </div>
       
-      {/* Footer */}
-      <div className="absolute flex justify-between text-sm" style={{ 
-        bottom: `${PAGE_DIMENSIONS.MARGIN_PX}px`, 
+      {/* Compact Footer */}
+      <div className="absolute flex justify-between pdf-footer" style={{ 
+        bottom: `${PAGE_DIMENSIONS.MARGIN_PX * 0.3}px`, 
         left: `${PAGE_DIMENSIONS.MARGIN_PX}px`, 
         right: `${PAGE_DIMENSIONS.MARGIN_PX}px` 
       }}>
-        <div>
-          <div>Project Number: {header.projectNumber}</div>
-          <div>Issued: {header.issueDate}</div>
+        <div className="text-xs">
+          <div>Project: {header.projectNumber} | Issued: {header.issueDate}</div>
         </div>
-        <div>Page | {pageNumber}</div>
+        <div className="text-xs">Page {pageNumber}</div>
       </div>
     </div>
   );

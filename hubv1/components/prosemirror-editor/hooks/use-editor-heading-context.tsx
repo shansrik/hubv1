@@ -21,41 +21,33 @@ export const useEditorHeadingContext = (editor: Editor | null) => {
         const { from } = editor.state.selection;
         const doc = editor.state.doc;
 
-        // Find the heading node that contains this position
+        // Find the most recent heading before the cursor
         let headingText = '';
-        let resolvedPos = doc.resolve(from);
-        let depth = resolvedPos.depth;
-
-        // Walk up the document tree to find nearest heading
-        for (let i = depth; i >= 0; i--) {
-          const node = resolvedPos.node(i);
-          if (node && node.type.name === 'heading') {
-            headingText = node.textContent;
-            break;
-          }
-        }
-
-        // If no direct heading found, look for the previous heading in the document
-        if (!headingText) {
-          let currentPos = from;
-          doc.nodesBetween(0, currentPos, (node, pos) => {
-            if (node.type.name === 'heading') {
+        let mostRecentHeadingPos = -1;
+        
+        // Scan the document from start to cursor position to find all headings
+        doc.nodesBetween(0, from, (node, pos) => {
+          if (node.type.name === 'heading') {
+            // Check if this heading is closer to the cursor than previously found ones
+            if (pos > mostRecentHeadingPos && pos <= from) {
               headingText = node.textContent;
+              mostRecentHeadingPos = pos;
             }
-            return true; // Continue traversal
-          });
-        }
+          }
+          return true; // Continue traversal
+        });
 
-        // Update heading context if changed
-        if (headingText !== headingContext) {
+        // Update heading context if changed and not empty
+        if (headingText && headingText !== headingContext) {
           setHeadingContext(headingText);
+          console.log('Active heading context updated:', headingText);
         }
       } catch (error) {
         console.error('Error extracting heading context:', error);
       }
     };
 
-    // Set up transaction handler to detect cursor movement
+    // Set up transaction handler to detect any document or selection changes
     const handleTransaction = () => {
       extractHeadingContext();
     };
@@ -63,14 +55,16 @@ export const useEditorHeadingContext = (editor: Editor | null) => {
     // Initial extraction
     extractHeadingContext();
 
-    // Add transaction handler
+    // Add transaction and focus handlers
     editor.on('transaction', handleTransaction);
     editor.on('focus', extractHeadingContext);
+    editor.on('update', extractHeadingContext); // Also check on any editor update
     
     // Clean up
     return () => {
       editor.off('transaction', handleTransaction);
       editor.off('focus', extractHeadingContext);
+      editor.off('update', extractHeadingContext);
     };
   }, [editor, headingContext]);
 
