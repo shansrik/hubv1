@@ -16,10 +16,13 @@ export interface ReportPhoto {
   subsectionId: string | null;
 }
 
+export type PageType = 'standard' | 'photo-appendix';
+
 export interface ReportPage {
   id: string;
   content: string;
   images: ReportImage[];
+  type?: PageType;
 }
 
 export interface ReportImage {

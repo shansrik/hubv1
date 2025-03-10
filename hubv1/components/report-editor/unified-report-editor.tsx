@@ -7,8 +7,11 @@ import {
   Plus,
   Image as ImageIcon,
   Pencil,
+  Camera,
+  ChevronDown
 } from "lucide-react"
 import PhotoGrid from "@/components/photo-grid/photo-grid"
+import { loadPhotosFromStorage } from "@/components/photo-grid/photo-utils"
 import { useToast } from "@/components/ui/use-toast"
 import { ReportPage, ReportHeader, CompanyLogo, PAGE_DIMENSIONS } from "./types"
 import { exportToPDF } from "@/lib/pdf-utils"
@@ -28,11 +31,36 @@ export default function UnifiedReportEditor() {
   const [isGenerating, setIsGenerating] = useState(false)
   const [isInsertingPhoto, setIsInsertingPhoto] = useState(false)
   const [activeHeadingContext, setActiveHeadingContext] = useState<string>("")
+  const [dropdownOpen, setDropdownOpen] = useState(false)
+  const dropdownRef = useRef<HTMLDivElement>(null)
   
   // Log when heading context changes for debugging
   useEffect(() => {
     console.log("Active heading context in unified editor:", activeHeadingContext);
   }, [activeHeadingContext]);
+  
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    if (!dropdownOpen) return;
+    
+    const handleClickOutside = (event: MouseEvent) => {
+      // Don't close if clicking inside dropdown or dropdown toggle button
+      if (dropdownRef.current && dropdownRef.current.contains(event.target as Node)) {
+        return;
+      }
+      
+      // Close the dropdown when clicking outside
+      setDropdownOpen(false);
+    };
+    
+    // Add the event listener
+    document.addEventListener('mousedown', handleClickOutside);
+    
+    // Clean up
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [dropdownOpen]);
   
   // Document state
   const [customPages, setCustomPages] = useState<ReportPage[]>(() => {
@@ -130,8 +158,8 @@ export default function UnifiedReportEditor() {
   })
 
   // Page operations
-  const addNewPage = () => {
-    const newPage = createEmptyPage();
+  const addNewPage = (pageType: 'standard' | 'photo-appendix' = 'standard') => {
+    const newPage = createEmptyPage(pageType);
     setCustomPages([...customPages, newPage]);
     
     setTimeout(() => {
@@ -141,8 +169,10 @@ export default function UnifiedReportEditor() {
     }, 100);
     
     toast({
-      title: "Page Added",
-      description: "A new page has been added to your report."
+      title: pageType === 'photo-appendix' ? "Photo Appendix Added" : "Page Added",
+      description: pageType === 'photo-appendix' 
+        ? "A new photo appendix page has been added to your report."
+        : "A new page has been added to your report."
     });
   }
   
@@ -193,27 +223,62 @@ export default function UnifiedReportEditor() {
       return
     }
     
+    // Helper function to get actual photo path/URL from ID
+    const getPhotoUrl = (photoId: string): string => {
+      // Load all photos
+      const allPhotos = loadPhotosFromStorage();
+      // Find the matching photo
+      const photo = allPhotos.find(p => p.id === photoId);
+      // Return the path or a placeholder if not found
+      return photo ? (photo.dataUrl || photo.path) : '/placeholder.svg?height=200&width=200';
+    };
+    
     setCustomPages(prevPages => 
       prevPages.map(page => {
         if (page.id === pageId) {
-          return {
-            ...page,
-            images: [
-              ...page.images,
-              {
-                id: `image-${Date.now()}`,
-                url: selectedPhotos[0],
+          // For photo appendix pages, handle differently
+          if (page.type === 'photo-appendix') {
+            // Create image objects for each selected photo
+            const newImages = selectedPhotos.map((photoId, index) => {
+              const photoUrl = getPhotoUrl(photoId);
+              return {
+                id: `image-${Date.now()}-${index}`,
+                url: photoUrl,
                 width: 400,
                 height: 300
-              }
-            ]
+              };
+            });
+            
+            console.log('Adding photos to appendix:', newImages);
+            
+            return {
+              ...page,
+              images: [...page.images, ...newImages]
+            };
+          } else {
+            // For standard pages, just add the first selected photo
+            const photoUrl = getPhotoUrl(selectedPhotos[0]);
+            const newImage = {
+              id: `image-${Date.now()}`,
+              url: photoUrl,
+              width: 400,
+              height: 300
+            };
+            
+            console.log('Adding photo to standard page:', newImage);
+            
+            return {
+              ...page,
+              images: [...page.images, newImage]
+            };
           }
         }
-        return page
+        return page;
       })
-    )
+    );
     
-    setSelectedPhotos([])
+    // Clear selected photos after adding them
+    setSelectedPhotos([]);
     
     toast({
       title: "Photo Added",
@@ -435,14 +500,59 @@ export default function UnifiedReportEditor() {
               Page {currentPage} of {totalPages}
             </div>
             <div className="flex items-center space-x-2">
-              <Button 
-                size="sm" 
-                variant="outline"
-                onClick={addNewPage}
-              >
-                <Plus className="h-4 w-4 mr-1" />
-                Add Page
-              </Button>
+              {/* Proper React-based dropdown with state management */}
+              <div className="relative" ref={dropdownRef}>
+                <div className="flex">
+                  <Button 
+                    size="sm" 
+                    variant="outline"
+                    onClick={() => addNewPage('standard')}
+                    className="rounded-r-none border-r-0"
+                  >
+                    <Plus className="h-4 w-4 mr-1" />
+                    Add Page
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="rounded-l-none px-1"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDropdownOpen(!dropdownOpen);
+                    }}
+                  >
+                    <ChevronDown className="h-4 w-4" />
+                  </Button>
+                </div>
+                
+                {dropdownOpen && (
+                  <div 
+                    className="absolute top-full right-0 mt-1 bg-white shadow-lg rounded-md border border-gray-200 py-1 z-10"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <button
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 flex items-center"
+                      onClick={() => {
+                        addNewPage('standard');
+                        setDropdownOpen(false);
+                      }}
+                    >
+                      <Plus className="h-3.5 w-3.5 mr-2" />
+                      Standard Page
+                    </button>
+                    <button
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 flex items-center"
+                      onClick={() => {
+                        addNewPage('photo-appendix');
+                        setDropdownOpen(false);
+                      }}
+                    >
+                      <Camera className="h-3.5 w-3.5 mr-2" />
+                      Photo Appendix
+                    </button>
+                  </div>
+                )}
+              </div>
               
               <Button 
                 size="sm"
@@ -513,10 +623,19 @@ export default function UnifiedReportEditor() {
                     width: '100%',
                     height: `${PAGE_DIMENSIONS.HEIGHT_PX}px`,
                     transform: `translateY(${virtualRow.start}px)`,
+                    cursor: isInsertingPhoto ? 'copy' : 'default'
                   }}
                   data-page-number={pageNumber}
-                  className="page-container"
+                  className={`page-container ${isInsertingPhoto ? 'photo-insertion-mode' : ''}`}
                   id={`page-${pageNumber}`}
+                  onClick={() => {
+                    if (isInsertingPhoto) {
+                      // Insert the photo to this page
+                      insertPhotoToPage(page.id);
+                      // Exit insert mode
+                      setIsInsertingPhoto(false);
+                    }
+                  }}
                 >
                   <PageRenderer
                     page={page}

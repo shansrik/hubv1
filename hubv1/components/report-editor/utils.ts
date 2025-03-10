@@ -14,13 +14,22 @@ export const generateId = (prefix: string = '') => {
 
 /**
  * Creates a new empty report page
+ * @param type Optional page type, defaults to standard
  * @returns A new ReportPage object
  */
-export const createEmptyPage = (): ReportPage => {
+export const createEmptyPage = (type: 'standard' | 'photo-appendix' = 'standard'): ReportPage => {
+  let content = '<p>Click to edit this page content...</p>';
+  
+  if (type === 'photo-appendix') {
+    // Add specific styles directly to the heading to prevent spacing issues
+    content = `<h1 style="margin-top:0; margin-bottom:5px; padding:0; line-height:1.1;">Photographic Appendix</h1>`;
+  }
+  
   return {
     id: generateId('page-'),
-    content: '<p>Click to edit this page content...</p>',
-    images: []
+    content,
+    images: [],
+    type
   };
 };
 

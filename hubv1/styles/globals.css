@@ -93,7 +93,7 @@
 .ProseMirror h1 {
   font-size: 13pt;
   font-weight: bold;
-  margin: 0.7em 0 0.3em;
+  margin: 0 0 0.3em;
 }
 
 .ProseMirror h2 {
@@ -236,6 +236,56 @@
 
 @keyframes ai-spinner {
   to { transform: rotate(360deg); }
+}
+
+/* Photo insertion mode styling */
+.photo-insertion-mode {
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5) !important;
+  outline: 3px dashed rgba(59, 130, 246, 0.7) !important;
+  transition: all 0.2s ease-in-out;
+}
+
+.photo-insertion-mode:hover {
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.6) !important;
+  background-color: rgba(59, 130, 246, 0.05) !important;
+}
+
+/* Fix for editable descriptions */
+[contenteditable=true]:focus {
+  outline: none;
+  border-color: #d1d5db !important;
+  background-color: rgba(59, 130, 246, 0.05);
+}
+
+/* Optimize photographic appendix spacing */
+.photo-appendix-item {
+  margin-bottom: 1.5rem;
+}
+
+/* Zero out spacing for appendix header container */
+.appendix-header-container {
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* Zero out spacing for h1 inside appendix header */
+.appendix-header-container h1 {
+  margin-top: 0 !important;
+  margin-bottom: 6px !important;
+  padding: 0 !important;
+  line-height: 1.1 !important;
+}
+
+/* Special class for photo appendix content container */
+.photo-appendix-content {
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+/* Make the header extremely compact for photo appendix */
+.photo-appendix-content .always-editable-wrapper {
+  flex-shrink: 1 !important;
+  flex-grow: 0 !important;
 }
 
 /* PDF Export styles */

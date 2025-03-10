@@ -2,8 +2,8 @@
 
 import { useRef, ReactNode } from "react";
 import Image from "next/image";
-import { X } from "lucide-react";
-import { PAGE_DIMENSIONS, ReportHeader, ReportPage, CompanyLogo } from "./types";
+import { X, Camera } from "lucide-react";
+import { PAGE_DIMENSIONS, ReportHeader, ReportPage, CompanyLogo, ReportImage } from "./types";
 
 interface PageRendererProps {
   page: ReportPage;
@@ -38,9 +38,9 @@ export default function PageRenderer({
       }}
       data-page-id={page.id}
     >
-      {/* Compact Header */}
+      {/* Compact Header - position varies based on page type */}
       <div className="absolute pdf-header" style={{ 
-        top: `${PAGE_DIMENSIONS.MARGIN_PX * 0.3}px`, 
+        top: page.type === 'photo-appendix' ? `${PAGE_DIMENSIONS.MARGIN_PX * 0.15}px` : `${PAGE_DIMENSIONS.MARGIN_PX * 0.3}px`, 
         left: `${PAGE_DIMENSIONS.MARGIN_PX}px`, 
         right: `${PAGE_DIMENSIONS.MARGIN_PX}px` 
       }}>
@@ -63,47 +63,114 @@ export default function PageRenderer({
         </div>
       </div>
 
-      {/* Page content - adjusted for compact header and more content space */}
+      {/* Page content - adjusted based on page type */}
       <div 
-        className="absolute overflow-hidden content-container"
+        className={`absolute overflow-hidden content-container ${page.type === 'photo-appendix' ? 'photo-appendix-content' : ''}`}
         style={{ 
-          top: `${PAGE_DIMENSIONS.MARGIN_PX * 0.8}px`, // Reduced top margin for more content space 
+          // Further increased for photo appendix to avoid header clash
+          top: page.type === 'photo-appendix' ? `${PAGE_DIMENSIONS.MARGIN_PX * 0.9}px` : `${PAGE_DIMENSIONS.MARGIN_PX * 0.8}px`,
           left: `${PAGE_DIMENSIONS.MARGIN_PX}px`, 
           right: `${PAGE_DIMENSIONS.MARGIN_PX}px`, 
           bottom: `${PAGE_DIMENSIONS.MARGIN_PX + 20}px`,  // Adjusted for footer
           maxHeight: `${PAGE_DIMENSIONS.HEIGHT_PX - (PAGE_DIMENSIONS.MARGIN_PX + 68)}px` // More content space
         }}
       >
-        <div 
-          ref={contentRef} 
-          className="cursor-text min-h-[300px] always-editable-wrapper"
-          style={{
-            pageBreakInside: 'avoid',
-            breakInside: 'avoid'
-          }}
-        >
-          {children}
-        </div>
-        
-        {/* Page images */}
-        {page.images.length > 0 && (
-          <div className="mt-4 grid grid-cols-2 gap-4">
-            {page.images.map(image => (
-              <div key={image.id} className="relative">
-                <img 
-                  src={image.url} 
-                  alt="Report image" 
-                  className="w-full h-auto rounded-md"
-                />
-                <button
-                  className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1"
-                  onClick={() => onRemoveImage(image.id)}
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-            ))}
+        {page.type === 'photo-appendix' ? (
+          // For photo appendix pages, extremely minimal content area
+          <div 
+            ref={contentRef} 
+            className="cursor-text always-editable-wrapper appendix-header-container"
+            style={{
+              pageBreakInside: 'avoid',
+              breakInside: 'avoid',
+              minHeight: '35px', // Absolute minimum height
+              height: 'auto',
+              marginBottom: '0',
+              paddingBottom: '0',
+              paddingTop: '0',
+              marginTop: '0'
+            }}
+          >
+            {children}
           </div>
+        ) : (
+          // For standard pages, use the normal content area
+          <div 
+            ref={contentRef} 
+            className="cursor-text min-h-[300px] always-editable-wrapper"
+            style={{
+              pageBreakInside: 'avoid',
+              breakInside: 'avoid'
+            }}
+          >
+            {children}
+          </div>
+        )}
+        
+        {/* Page images - Different layout based on page type */}
+        {page.images.length > 0 && (
+          page.type === 'photo-appendix' ? (
+            // Photo Appendix Layout - Two photos per row with numbered sections - absolute minimal margin
+            <div style={{ marginTop: '4px' }} className="photo-grid-container">
+              <div className="grid grid-cols-2 gap-6">
+                {page.images.map((image, idx) => (
+                  <div key={image.id} className="photo-appendix-item">
+                    {/* Photograph section with numbering */}
+                    <div className="mb-1 font-medium text-sm">Photograph {String(idx + 1).padStart(2, '0')}</div>
+                    
+                    {/* Photo container with 4:3 aspect ratio */}
+                    <div className="relative mb-2" style={{ width: '100%', paddingBottom: '75%' }}>
+                      <div className="absolute inset-0">
+                        <img 
+                          src={image.url} 
+                          alt={`Photograph ${idx + 1}`} 
+                          className="w-full h-full object-cover rounded-md"
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        />
+                        <button
+                          className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1"
+                          onClick={() => onRemoveImage(image.id)}
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                    
+                    {/* Description area - make it editable */}
+                    <div className="text-xs mb-4 border border-transparent hover:border-gray-200 p-1 rounded" 
+                      contentEditable={true}
+                      suppressContentEditableWarning={true}
+                      onBlur={(e) => {
+                        // Here you could add logic to save the edited description
+                        console.log("Description edited:", e.currentTarget.textContent);
+                      }}
+                    >
+                      Description: View of property showing general condition.
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            // Standard Page Image Layout
+            <div className="mt-4 grid grid-cols-2 gap-4">
+              {page.images.map(image => (
+                <div key={image.id} className="relative">
+                  <img 
+                    src={image.url} 
+                    alt="Report image" 
+                    className="w-full h-auto rounded-md"
+                  />
+                  <button
+                    className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1"
+                    onClick={() => onRemoveImage(image.id)}
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )
         )}
       </div>
       

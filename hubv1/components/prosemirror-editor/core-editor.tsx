@@ -109,7 +109,7 @@ export const CoreEditor: React.FC<ProseMirrorEditorProps> = ({
     autofocus: 'end',
     editorProps: {
       attributes: {
-        class: 'prose max-w-none focus:outline-none min-h-[300px] px-2 py-4 cursor-text',
+        class: 'prose max-w-none focus:outline-none min-h-[50px] px-2 py-4 cursor-text',
         id: `editor-${Date.now()}`, // Add unique ID for menu targeting
       },
       handleClick(view, pos, event) {

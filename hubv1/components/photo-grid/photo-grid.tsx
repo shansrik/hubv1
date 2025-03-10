@@ -322,10 +322,10 @@ export default function PhotoGrid({ filterQuery, headingContext, selectedPhotos,
                     </div>
                   )}
                   
-                  {/* Relevance indicator */}
-                  {headingContext && photo.relevance && photo.relevance > 0 && (
+                  {/* Relevance indicator - only show if relevance is meaningful */}
+                  {headingContext && photo.relevance && photo.relevance > 1 && (
                     <div className="absolute top-1 left-1 bg-yellow-500 text-white text-[10px] px-1.5 rounded-sm">
-                      {photo.relevance > 3 ? 'High' : photo.relevance > 1 ? 'Med' : 'Low'}
+                      {photo.relevance > 3 ? 'High' : 'Med'}
                     </div>
                   )}
                 </div>
