@@ -667,11 +667,11 @@ export default function UnifiedReportEditor() {
           console.warn("WARNING: Image is still large (> 1MB), which may cause issues with API limits");
         }
         
-        console.log("Sending request to OpenAI API with image:", 
+        console.log("Sending request to AI API with image:", 
           selectedPhoto.path.substring(0, 30) + "...");
         
-        // If we have a selected photo, call the OpenAI API with the photo data
-        const response = await fetch('/api/openai', {
+        // If we have a selected photo, call the AI API with the photo data
+        const response = await fetch('/api/ai', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -679,11 +679,11 @@ export default function UnifiedReportEditor() {
           body: JSON.stringify({
             systemPrompt: `You are a professional report writer for property inspection reports. 
                           Use professional, technical language that is concise and factual.
-                          Reference the image in your response when relevant.`,
-            userPrompt: `${customPrompt || 'Write a technical sentence'} 
-                        about the following image: ${selectedPhoto.description || 'an image of a property element'}.
+                          Analyze the image in detail and incorporate your observations in your response.`,
+            userPrompt: `${customPrompt || 'Write a technical description'} 
+                        of the image I'm sharing with you.
                         ${selectedText ? `The current text is: "${selectedText}"` : ''}
-                        The text should be factual, professional, and provide relevant observations about what's shown. Keep it to one sentence.`,
+                        The text should be factual, professional, and provide relevant observations about what's shown.`,
             includePhoto: true,
             photoData: selectedPhoto.path,
           }),
@@ -697,7 +697,7 @@ export default function UnifiedReportEditor() {
         generatedText = data.content;
       } else {
         // No photo selected, just use text prompt
-        const response = await fetch('/api/openai', {
+        const response = await fetch('/api/ai', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -724,10 +724,10 @@ export default function UnifiedReportEditor() {
       console.log("Generated text:", generatedText);
       
       toast({
-        title: "GPT-4 text generated",
+        title: "AI text generated",
         description: selectedPhoto 
-          ? "GPT-4-generated text based on the selected photo has been created." 
-          : "GPT-4-generated text has been created.",
+          ? "AI-generated text based on the selected photo has been created." 
+          : "AI-generated text has been created.",
         duration: 3000,
       })
       

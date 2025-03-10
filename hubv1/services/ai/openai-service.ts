@@ -1,38 +1,9 @@
 /**
- * AI Service for interacting with Claude and OpenAI APIs
+ * OpenAI Service for interacting with the OpenAI API
  */
 
-// Claude interfaces
-interface ClaudeRequestBody {
-  model: string;
-  max_tokens: number;
-  messages: {
-    role: 'user' | 'assistant' | 'system';
-    content: string;
-  }[];
-  temperature?: number;
-  system?: string;
-}
-
-interface ClaudeResponse {
-  id: string;
-  type: string;
-  role: string;
-  content: {
-    type: string;
-    text: string;
-  }[];
-  model: string;
-  stop_reason: string;
-  stop_sequence: null | string;
-  usage: {
-    input_tokens: number;
-    output_tokens: number;
-  };
-}
-
-// OpenAI interfaces
-interface OpenAIRequestBody {
+// OpenAI API Types
+export interface OpenAIRequestBody {
   model: string;
   messages: {
     role: 'user' | 'assistant' | 'system';
@@ -45,7 +16,7 @@ interface OpenAIRequestBody {
   temperature?: number;
 }
 
-interface OpenAIResponse {
+export interface OpenAIResponse {
   id: string;
   object: string;
   created: number;
@@ -65,70 +36,9 @@ interface OpenAIResponse {
   };
 }
 
-// Claude API configuration
-const CLAUDE_API_URL = 'https://api.anthropic.com/v1/messages';
-let CLAUDE_API_KEY = process.env.CLAUDE_API_KEY || '';
-
 // OpenAI API configuration
 const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
-let OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
-
-// Function to set API keys programmatically if needed
-export const setClaudeApiKey = (apiKey: string) => {
-  CLAUDE_API_KEY = apiKey;
-};
-
-export const setOpenAIApiKey = (apiKey: string) => {
-  OPENAI_API_KEY = apiKey;
-};
-
-/**
- * Calls the Claude API with the given prompts
- * @param systemPrompt The system prompt to guide Claude's behavior
- * @param userPrompt The user's specific request
- * @returns The AI-generated text response
- */
-export const callClaudeAPI = async (systemPrompt: string, userPrompt: string): Promise<string> => {
-  try {
-    if (!CLAUDE_API_KEY) {
-      throw new Error('Claude API key not configured');
-    }
-
-    const requestBody: ClaudeRequestBody = {
-      model: 'claude-3-sonnet-20240229',
-      max_tokens: 1000,
-      messages: [
-        {
-          role: 'user',
-          content: userPrompt,
-        },
-      ],
-      temperature: 0.7,
-      system: systemPrompt,
-    };
-
-    const response = await fetch(CLAUDE_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': CLAUDE_API_KEY,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify(requestBody),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Claude API error: ${response.status} ${errorText}`);
-    }
-
-    const data = await response.json() as ClaudeResponse;
-    return data.content[0]?.text || '';
-  } catch (error) {
-    console.error('Error calling Claude API:', error);
-    throw error;
-  }
-};
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
 /**
  * Calls the OpenAI API with the given prompts
@@ -181,31 +91,125 @@ export const callOpenAIAPI = async (systemPrompt: string, userPrompt: string): P
 };
 
 /**
- * Load reference materials from specified files or endpoints
- * @param sourcePaths Array of paths to reference material files
- * @returns Combined reference materials as a string
+ * Processes an image for OpenAI's Vision API
+ * @param photoData The image data as a base64 string or data URL
+ * @returns Formatted image content object for the API request
  */
-export const loadReferenceContext = async (sourcePaths: string[]): Promise<string> => {
-  try {
-    const materials = await Promise.all(
-      sourcePaths.map(async (path) => {
-        const response = await fetch(path);
-        if (!response.ok) {
-          throw new Error(`Failed to load reference material from ${path}`);
-        }
-        return await response.text();
-      })
-    );
+export const processImageForOpenAI = (photoData: string): { 
+  type: string; 
+  image_url: { 
+    url: string; 
+    detail: string; 
+  }; 
+} | null => {
+  if (!photoData) return null;
 
-    return materials.join('\n\n');
+  try {
+    let base64Data: string;
+    
+    // Handle data URL vs raw base64
+    if (photoData.startsWith('data:image')) {
+      const matches = photoData.match(/^data:image\/([a-zA-Z]+);base64,(.+)$/);
+      
+      if (matches && matches.length >= 3) {
+        base64Data = matches[2].trim();
+      } else {
+        throw new Error("Invalid data URL format");
+      }
+    } else {
+      // It's raw base64, use it directly
+      base64Data = photoData.trim().replace(/\s/g, '');
+    }
+    
+    // Validate base64 data
+    if (!base64Data || base64Data.length === 0) {
+      throw new Error("Empty base64 data");
+    }
+    
+    // Return the formatted image content
+    return {
+      type: "image_url",
+      image_url: {
+        url: `data:image/jpeg;base64,${base64Data}`,
+        detail: "low" // Using 'low' detail for better performance
+      }
+    };
   } catch (error) {
-    console.error('Error loading reference materials:', error);
-    return ''; // Return empty string if loading fails
+    console.error("Error processing image for OpenAI:", error);
+    return null;
   }
 };
 
 /**
- * Creates a formatted reference context from your materials
+ * Sends a multimodal request to OpenAI with text and image
+ * @param systemPrompt The system prompt to guide OpenAI's behavior
+ * @param userPrompt The user's specific request
+ * @param photoData The image data as a base64 string or data URL
+ * @returns The AI-generated text response
+ */
+export const callOpenAIVisionAPI = async (
+  systemPrompt: string, 
+  userPrompt: string, 
+  photoData: string
+): Promise<string> => {
+  try {
+    if (!OPENAI_API_KEY) {
+      throw new Error('OpenAI API key not configured');
+    }
+
+    // Process the image
+    const imageContent = processImageForOpenAI(photoData);
+    
+    if (!imageContent) {
+      throw new Error('Failed to process image data');
+    }
+
+    // Create the request body with image
+    const requestBody: OpenAIRequestBody = {
+      model: 'gpt-4o',
+      messages: [
+        {
+          role: 'system',
+          content: systemPrompt,
+        },
+        {
+          role: 'user',
+          content: [
+            { type: "text", text: userPrompt },
+            imageContent
+          ]
+        }
+      ],
+      max_tokens: 1000,
+      temperature: 0.7,
+    };
+
+    // Make the API request
+    const response = await fetch(OPENAI_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`OpenAI Vision API error: ${response.status} ${errorText}`);
+    }
+
+    const data = await response.json() as OpenAIResponse;
+    return data.choices[0]?.message?.content || '';
+  } catch (error) {
+    console.error('Error calling OpenAI Vision API:', error);
+    throw error;
+  }
+};
+
+// Reference materials utilities
+/**
+ * Creates a formatted reference context from materials
  * @param materials Object containing various reference materials
  * @returns Formatted reference context string
  */

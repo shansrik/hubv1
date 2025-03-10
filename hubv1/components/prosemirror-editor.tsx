@@ -31,7 +31,7 @@ import { Button } from "@/components/ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/components/ui/use-toast"
-import { callOpenAIAPI, createReferenceContext } from "@/lib/ai-service"
+import { createReferenceContext } from "@/services/ai/openai-service"
 
 interface ProseMirrorEditorProps {
   initialContent?: string
@@ -378,7 +378,7 @@ export default function ProseMirrorEditor({
       }
       
       toast({
-        title: "GPT-4 Enhancement Applied",
+        title: "AI Enhancement Applied",
         description: toastMessage,
         duration: 3000
       })
@@ -386,7 +386,7 @@ export default function ProseMirrorEditor({
       console.error("Error enhancing text:", error)
       toast({
         title: "Enhancement failed",
-        description: "There was an error enhancing your text with GPT-4.",
+        description: "There was an error enhancing your text with AI.",
         variant: "destructive"
       })
     } finally {
@@ -402,7 +402,7 @@ export default function ProseMirrorEditor({
     options?: { includePhoto?: boolean; photoData?: string | null }
   ): Promise<string> => {
     try {
-      console.log("Calling OpenAI API via API route with prompt:", userPrompt.substring(0, 50) + "...");
+      console.log("Calling AI API with prompt:", userPrompt.substring(0, 50) + "...");
       
       // Check for selected photo in the document
       // This is a DOM-based approach to check if a photo is selected in the UI
@@ -576,12 +576,12 @@ export default function ProseMirrorEditor({
       }
       
       // Enhanced system prompt with photo context
-      if (hasSelectedPhoto && photoDescription) {
-        systemPrompt = `${systemPrompt}\n\nIMPORTANT: There is a selected photo that should be referenced in your response. The photo description is: "${photoDescription}". Your task is to enhance the text while incorporating relevant details from this photo. Make sure to explicitly reference visual elements from the photo in your response.`;
+      if (hasSelectedPhoto) {
+        systemPrompt = `${systemPrompt}\n\nIMPORTANT: There is a selected photo that should be analyzed and referenced in your response. Your task is to enhance the text while incorporating relevant details from this photo. Make sure to explicitly reference visual elements from the photo in your response.`;
       }
       
-      // Call our OpenAI API route
-      const response = await fetch('/api/openai', {
+      // Call our consolidated AI API route
+      const response = await fetch('/api/ai', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -590,14 +590,13 @@ export default function ProseMirrorEditor({
           systemPrompt,
           userPrompt,
           includePhoto: hasSelectedPhoto && !!photoData,
-          photoData,
-          photoDescription,
+          photoData
         }),
       });
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: "Unknown error" }));
-        console.error("OpenAI API route error:", errorData);
+        console.error("AI API route error:", errorData);
         throw new Error(`API error: ${response.status} - ${errorData.error || "Unknown error"}`);
       }
       
@@ -608,15 +607,15 @@ export default function ProseMirrorEditor({
         throw new Error("Invalid API response format");
       }
       
-      console.log("OpenAI API response received, length:", data.content.length);
+      console.log("AI API response received, length:", data.content.length);
       return data.content;
     } catch (error) {
-      console.error("Error enhancing text with OpenAI:", error);
+      console.error("Error enhancing text with AI:", error);
       
       // Provide a helpful fallback that tells the user what happened
       toast({
         title: "AI Enhancement Error",
-        description: "There was an error connecting to the OpenAI service. Please try again.",
+        description: "There was an error connecting to the AI service. Please try again.",
         variant: "destructive",
         duration: 5000
       });
@@ -929,7 +928,7 @@ export default function ProseMirrorEditor({
               <div className="ai-menu-container flex items-center">
                 {/* AI Model indicator */}
                 <span className="text-xs mr-1 px-1 py-0.5 bg-gray-100 rounded text-gray-600">
-                  GPT-4
+                  AI
                 </span>
                 
                 <Button 
