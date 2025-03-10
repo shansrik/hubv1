@@ -1,4 +1,4 @@
-import UnifiedReportEditor from "@/components/unified-report-editor"
+import UnifiedReportEditor from "@/components/report-editor/unified-report-editor"
 
 export default function Home() {
   return (

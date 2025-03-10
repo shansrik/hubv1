@@ -277,7 +277,7 @@ export default function PhotoGrid({ filterQuery, selectedPhotos, onSelectPhoto }
                   selectedPhotos.includes(photo.id) ? "border-blue-500 ring-2 ring-blue-300" : "border-gray-200"
                 } group transition-all hover:shadow-md`}
                 data-photo-id={photo.id}
-                onClick={() => onSelectPhoto(photo.id)}
+                onClick={(e) => onSelectPhoto(photo.id, e.ctrlKey || e.metaKey)}
               >
                 <div className="aspect-w-4 aspect-h-3">
                   <Image
@@ -295,6 +295,11 @@ export default function PhotoGrid({ filterQuery, selectedPhotos, onSelectPhoto }
                   <p className="text-[10px] text-gray-500 line-clamp-2 h-8">
                     {photo.description || "No description"}
                   </p>
+                  {selectedPhotos.includes(photo.id) && selectedPhotos.length > 1 && (
+                    <div className="absolute bottom-1 left-1 bg-blue-500 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center">
+                      {selectedPhotos.indexOf(photo.id) + 1}
+                    </div>
+                  )}
                 </div>
                 
                 {/* Delete button */}

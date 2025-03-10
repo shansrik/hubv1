@@ -9,5 +9,5 @@ export interface Photo {
 export interface PhotoGridProps {
   filterQuery: string;
   selectedPhotos: string[];
-  onSelectPhoto: (id: string) => void;
+  onSelectPhoto: (id: string, isCtrlPressed?: boolean) => void;
 }
