@@ -1,0 +1,24 @@
+# Build output
+.next/
+out/
+build/
+dist/
+
+# Node modules
+node_modules/
+
+# Public assets
+public/
+
+# Environment
+.env*
+!.env.example
+
+# Cache
+.cache/
+.vercel/
+
+# Config files
+next.config.*
+tailwind.config.*
+postcss.config.*

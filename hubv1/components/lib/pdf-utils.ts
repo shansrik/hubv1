@@ -99,9 +99,11 @@ export const extractTextContent = (document: any) => {
     .join('\n');
 };
 
-export default {
+const pdfUtils = {
   prepareReportForPdf,
   generateImageGrid,
   optimizeImagesForPdf,
   extractTextContent
 };
+
+export default pdfUtils;
