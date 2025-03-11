@@ -54,6 +54,56 @@
   z-index: 999;
 }
 
+/* Format toolbar styling */
+.format-toolbar-container {
+  width: 100%;
+  border-bottom: 1px solid #e5e7eb;
+  z-index: 40;
+  transition: opacity 0.2s ease-in-out;
+  background-color: #f9fafb;
+}
+
+.format-toolbar-container.inactive {
+  opacity: 0.7;
+}
+
+.format-toolbar-container.active {
+  opacity: 1;
+}
+
+.format-toolbar {
+  width: 100%;
+  z-index: 40;
+  padding: 4px 8px;
+  background-color: transparent;
+}
+
+.format-toolbar button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.75rem;
+  margin: 0 2px;
+}
+
+.format-toolbar button:hover {
+  background-color: #f3f4f6;
+}
+
+.format-toolbar button[data-state="active"] {
+  background-color: #e5e7eb;
+  font-weight: 500;
+}
+
+/* Add Page button styles in format toolbar */
+.format-toolbar-container .add-page-container {
+  display: flex;
+  align-items: center;
+  padding-right: 12px;
+  margin-right: 12px;
+  border-right: 1px solid #e5e7eb;
+}
+
 /* Button styles to match UI */
 .format-menu-dropdown button {
   background: transparent;

@@ -11,6 +11,9 @@ interface PageRendererProps {
   header: ReportHeader;
   logo: CompanyLogo;
   onRemoveImage: (imageId: string) => void;
+  onGenerateImageDescription?: (imageId: string) => void;
+  onUpdateImageDescription?: (imageId: string, description: string) => void;
+  isGenerating?: boolean;
   children?: ReactNode;
 }
 
@@ -20,6 +23,9 @@ export default function PageRenderer({
   header,
   logo,
   onRemoveImage,
+  onGenerateImageDescription,
+  onUpdateImageDescription,
+  isGenerating = false,
   children
 }: PageRendererProps) {
   const contentRef = useRef<HTMLDivElement>(null);
@@ -137,15 +143,37 @@ export default function PageRenderer({
                     </div>
                     
                     {/* Description area - make it editable */}
-                    <div className="text-xs mb-4 border border-transparent hover:border-gray-200 p-1 rounded" 
-                      contentEditable={true}
-                      suppressContentEditableWarning={true}
-                      onBlur={(e) => {
-                        // Here you could add logic to save the edited description
-                        console.log("Description edited:", e.currentTarget.textContent);
-                      }}
-                    >
-                      Description: View of property showing general condition.
+                    <div className="relative">
+                      <div 
+                        className="text-xs mb-1 border border-transparent hover:border-gray-200 p-1 rounded" 
+                        contentEditable={true}
+                        suppressContentEditableWarning={true}
+                        onBlur={(e) => {
+                          // Save the edited description
+                          if (onUpdateImageDescription && e.currentTarget.textContent !== null) {
+                            onUpdateImageDescription(image.id, e.currentTarget.textContent);
+                          }
+                        }}
+                      >
+                        {image.description || "Description: View of property showing general condition."}
+                      </div>
+                      
+                      {/* AI Description button */}
+                      {onGenerateImageDescription && (
+                        <button
+                          className={`text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded-md 
+                                     hover:bg-blue-100 flex items-center mb-3
+                                     ${isGenerating ? 'opacity-50 cursor-not-allowed' : ''}`}
+                          onClick={() => onGenerateImageDescription(image.id)}
+                          disabled={isGenerating}
+                        >
+                          <svg className="h-3 w-3 mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M9.5 14.5L12 12m0 0l2.5-2.5M12 12l-2.5-2.5M12 12l2.5 2.5" />
+                            <circle cx="12" cy="12" r="10" />
+                          </svg>
+                          {isGenerating ? 'Generating...' : 'AI Description'}
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}

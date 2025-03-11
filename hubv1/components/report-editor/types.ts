@@ -30,6 +30,8 @@ export interface ReportImage {
   url: string;
   width: number;
   height: number;
+  description?: string;
+  originalPhotoId?: string; // To keep track of the source photo ID for AI generation
 }
 
 export interface ReportSection {

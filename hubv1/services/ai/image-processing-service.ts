@@ -13,19 +13,58 @@ export const imageProcessingService = {
    */
   getProcessedImage: async (imageId: string): Promise<string> => {
     try {
-      // Find the image in the DOM
+      // First try to find the image in the photo grid (for direct selection)
       const photoElement = document.querySelector(`[data-photo-id="${imageId}"]`) as HTMLElement;
-      if (!photoElement) throw new Error('Image element not found');
       
-      const imgElement = photoElement.querySelector('img') as HTMLImageElement;
-      if (!imgElement) throw new Error('Image not found within container');
+      if (photoElement) {
+        const imgElement = photoElement.querySelector('img') as HTMLImageElement;
+        if (imgElement) {
+          // Get the image source
+          const imageSrc = imgElement.src;
+          
+          // Process the image (resize and compress)
+          const processedImageData = await resizeAndCompressImage(imageSrc);
+          return processedImageData;
+        }
+      }
       
-      // Get the image source
-      const imageSrc = imgElement.src;
+      // If not found in the photo grid, try finding it in any photo appendix
+      // This handles the case when generating descriptions for photos already in the appendix
+      const appendixImg = document.querySelector(`img[src*="${imageId}"]`) as HTMLImageElement;
+      if (appendixImg) {
+        const processedImageData = await resizeAndCompressImage(appendixImg.src);
+        return processedImageData;
+      }
       
-      // Process the image (resize and compress)
-      const processedImageData = await resizeAndCompressImage(imageSrc);
-      return processedImageData;
+      // If not found in either location, try directly using the ID as a URL
+      // This would work if the ID is actually a path or URL
+      try {
+        // First check if it looks like a URL or path
+        if (imageId.includes('/') || imageId.includes('.')) {
+          const processedImageData = await resizeAndCompressImage(imageId);
+          return processedImageData;
+        }
+      } catch (innerError) {
+        console.error('Error treating ID as URL:', innerError);
+      }
+      
+      // Load photos from storage as last resort
+      try {
+        // Use a module import to get the storage function
+        const { loadPhotosFromStorage } = await import('@/components/photo-grid/photo-utils');
+        const allPhotos = loadPhotosFromStorage();
+        const photo = allPhotos.find(p => p.id === imageId);
+        
+        if (photo && (photo.dataUrl || photo.path)) {
+          const src = photo.dataUrl || photo.path;
+          const processedImageData = await resizeAndCompressImage(src);
+          return processedImageData;
+        }
+      } catch (storageError) {
+        console.error('Error loading from storage:', storageError);
+      }
+      
+      throw new Error('Image not found by any method');
     } catch (error) {
       console.error('Error processing image:', error);
       throw error;

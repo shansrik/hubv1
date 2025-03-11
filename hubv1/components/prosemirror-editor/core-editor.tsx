@@ -10,6 +10,7 @@ import { useEditorKeyboard } from './hooks/use-editor-keyboard'
 import { useEditorHeadingContext } from './hooks/use-editor-heading-context'
 import { EditorBubbleMenu } from './menus/bubble-menu'
 import { FormatMenu } from './menus/format-menu'
+import { FormatToolbar } from './menus/format-toolbar'
 
 // Define a custom extension for temporary text highlighting
 const TemporaryHighlight = Extension.create({
@@ -87,7 +88,8 @@ export const CoreEditor: React.FC<ProseMirrorEditorProps> = ({
   alwaysEditable = false,
   selectedPhotoId,
   onGenerateText,
-  onHeadingChange
+  onHeadingChange,
+  onEditorReady
 }) => {
   // State management
   
@@ -109,7 +111,7 @@ export const CoreEditor: React.FC<ProseMirrorEditorProps> = ({
     autofocus: 'end',
     editorProps: {
       attributes: {
-        class: 'prose max-w-none focus:outline-none min-h-[50px] px-2 py-4 cursor-text',
+        class: 'prose max-w-none focus:outline-none min-h-[50px] px-2 py-4 cursor-text mt-1',
         id: `editor-${Date.now()}`, // Add unique ID for menu targeting
       },
       handleClick(view, pos, event) {
@@ -157,6 +159,11 @@ export const CoreEditor: React.FC<ProseMirrorEditorProps> = ({
     if (editor) {
       console.log("Editor initialized successfully")
       
+      // Call onEditorReady callback if provided
+      if (onEditorReady) {
+        onEditorReady(editor);
+      }
+      
       // Make sure when we click inside any editor we properly focus it
       const editorElement = editor.options.element
       if (editorElement) {
@@ -182,7 +189,7 @@ export const CoreEditor: React.FC<ProseMirrorEditorProps> = ({
         }
       }
     }
-  }, [editor])
+  }, [editor, onEditorReady])
 
   // Global document click handler for menu management
   useEffect(() => {
@@ -274,7 +281,7 @@ export const CoreEditor: React.FC<ProseMirrorEditorProps> = ({
         </div>
       )}
       
-      {/* Editor content with menu trigger */}
+      {/* Editor content */}
       <div 
         className={`relative ${alwaysEditable ? 'always-editable-container' : ''}`} 
         onClick={() => {

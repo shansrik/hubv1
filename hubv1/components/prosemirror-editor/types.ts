@@ -11,6 +11,7 @@ export interface ProseMirrorEditorProps {
   selectedPhotoId?: string
   onGenerateText?: (selectedText: string, customPrompt?: string) => Promise<string | null>
   onHeadingChange?: (headingContext: string) => void
+  onEditorReady?: (editor: Editor) => void
 }
 
 /**

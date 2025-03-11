@@ -15,7 +15,8 @@ import { loadPhotosFromStorage } from "@/components/photo-grid/photo-utils"
 import { useToast } from "@/components/ui/use-toast"
 import { ReportPage, ReportHeader, CompanyLogo, PAGE_DIMENSIONS } from "./types"
 import { exportToPDF } from "@/lib/pdf-utils"
-import ProseMirrorEditor from "@/components/prosemirror-editor/index"
+import ProseMirrorEditor, { FormatToolbar } from "@/components/prosemirror-editor/index"
+import { Editor } from "@tiptap/react"
 import { Button } from "@/components/ui/button"
 import { useVirtualizer } from "@tanstack/react-virtual"
 import { createEmptyPage, calculateCurrentPage, scrollToPage } from "./utils"
@@ -32,6 +33,9 @@ export default function UnifiedReportEditor() {
   const [isInsertingPhoto, setIsInsertingPhoto] = useState(false)
   const [activeHeadingContext, setActiveHeadingContext] = useState<string>("")
   const [dropdownOpen, setDropdownOpen] = useState(false)
+  const [activeEditor, setActiveEditor] = useState<Editor | null>(null)
+  const [activePage, setActivePage] = useState<string | null>(null)
+  const editorsMap = useRef<Map<string, Editor>>(new Map())
   const dropdownRef = useRef<HTMLDivElement>(null)
   
   // Log when heading context changes for debugging
@@ -109,7 +113,15 @@ export default function UnifiedReportEditor() {
   
   // Track current page based on scroll position
   useEffect(() => {
+    // Create a throttle function to prevent too many updates
+    let lastScrollTime = 0;
+    const throttleTime = 150; // ms
+    
     const updatePageFromScroll = () => {
+      const now = Date.now();
+      if (now - lastScrollTime < throttleTime) return;
+      lastScrollTime = now;
+      
       if (!reportContainerRef.current) return;
       
       const scrollElement = reportContainerRef.current;
@@ -117,6 +129,33 @@ export default function UnifiedReportEditor() {
       
       if (visiblePageNumber !== currentPage && visiblePageNumber > 0) {
         setCurrentPage(visiblePageNumber);
+        
+        // When scrolling to a new page, we need to update active editor and context
+        const pageIndex = visiblePageNumber - 1;
+        
+        if (customPages[pageIndex]) {
+          const nextPageId = customPages[pageIndex].id;
+          const nextPageEditor = editorsMap.current.get(nextPageId);
+          
+          if (nextPageEditor) {
+            // Update the active editor (ensure this doesn't trigger the heading reset)
+            setActiveEditor(nextPageEditor);
+            setActivePage(nextPageId);
+            
+            // Check if there's a heading in this page to set the context
+            const currentHeadingContext = nextPageEditor.getAttributes('heading').level 
+              ? nextPageEditor.state.doc.textContent.split('\n')[0]?.trim() || ''
+              : '';
+              
+            if (currentHeadingContext) {
+              console.log(`Setting heading context from scroll: "${currentHeadingContext}"`);
+              setActiveHeadingContext(currentHeadingContext);
+            } else {
+              // Reset if no heading
+              setActiveHeadingContext("");
+            }
+          }
+        }
       }
     };
     
@@ -130,7 +169,7 @@ export default function UnifiedReportEditor() {
         container.removeEventListener('scroll', updatePageFromScroll);
       }
     };
-  }, [currentPage]);
+  }, [currentPage, customPages]);
   
   // Prevent unwanted navigation on container clicks
   useEffect(() => {
@@ -160,7 +199,16 @@ export default function UnifiedReportEditor() {
   // Page operations
   const addNewPage = (pageType: 'standard' | 'photo-appendix' = 'standard') => {
     const newPage = createEmptyPage(pageType);
+    
+    // Since we're adding a new page, set it as the active page
+    // but need to wait for it to be rendered first
     setCustomPages([...customPages, newPage]);
+    
+    // Clear active editor state since we're about to navigate
+    setActiveEditor(null);
+    setActivePage(null);
+    // Also reset the active heading context
+    setActiveHeadingContext("");
     
     setTimeout(() => {
       if (reportContainerRef.current) {
@@ -186,7 +234,34 @@ export default function UnifiedReportEditor() {
       return;
     }
     
+    // If this is the active page, clear the active editor state
+    if (pageId === activePage) {
+      setActiveEditor(null);
+      setActivePage(null);
+      setActiveHeadingContext("");
+    }
+    
+    // Remove this page from our editors map
+    editorsMap.current.delete(pageId);
+    
+    // Remove the page from the pages array
     setCustomPages(customPages.filter(page => page.id !== pageId));
+    
+    // If we have remaining pages, select the first page as active
+    setTimeout(() => {
+      if (customPages.length > 1) {
+        const remainingPages = customPages.filter(page => page.id !== pageId);
+        if (remainingPages.length > 0) {
+          const firstPageId = remainingPages[0].id;
+          const firstEditor = editorsMap.current.get(firstPageId);
+          
+          if (firstEditor) {
+            setActiveEditor(firstEditor);
+            setActivePage(firstPageId);
+          }
+        }
+      }
+    }, 50);
     
     toast({
       title: "Page Deleted",
@@ -245,7 +320,9 @@ export default function UnifiedReportEditor() {
                 id: `image-${Date.now()}-${index}`,
                 url: photoUrl,
                 width: 400,
-                height: 300
+                height: 300,
+                description: "Description: View of property showing general condition.",
+                originalPhotoId: photoId // Store original photo ID for AI generation
               };
             });
             
@@ -262,7 +339,8 @@ export default function UnifiedReportEditor() {
               id: `image-${Date.now()}`,
               url: photoUrl,
               width: 400,
-              height: 300
+              height: 300,
+              originalPhotoId: selectedPhotos[0] // Store original photo ID for AI generation
             };
             
             console.log('Adding photo to standard page:', newImage);
@@ -304,6 +382,30 @@ export default function UnifiedReportEditor() {
   const handleSaveHeader = (newHeader: ReportHeader) => {
     setHeaderData(newHeader)
     setEditingHeader(false)
+    
+    // Restore the active editor if we have any pages
+    if (customPages.length > 0 && editorsMap.current.size > 0) {
+      const firstPageId = customPages[0].id;
+      const firstEditor = editorsMap.current.get(firstPageId);
+      
+      if (firstEditor) {
+        setActiveEditor(firstEditor);
+        setActivePage(firstPageId);
+        
+        // Get the heading from the first editor if it exists
+        const currentHeadingContext = firstEditor.getAttributes('heading').level 
+          ? firstEditor.state.doc.textContent.split('\n')[0]?.trim() || ''
+          : '';
+          
+        if (currentHeadingContext) {
+          console.log(`Restoring heading context after header edit: "${currentHeadingContext}"`);
+          setActiveHeadingContext(currentHeadingContext);
+        } else {
+          // Reset if no heading
+          setActiveHeadingContext("");
+        }
+      }
+    }
     
     toast({
       title: "Header Updated",
@@ -419,6 +521,83 @@ export default function UnifiedReportEditor() {
     }
   }
 
+  // Generate AI description for a photo in an appendix
+  const generatePhotoDescription = async (pageId: string, imageId: string) => {
+    // Find the page and image
+    const page = customPages.find(p => p.id === pageId);
+    if (!page) return;
+    
+    const image = page.images.find(img => img.id === imageId);
+    if (!image || !image.originalPhotoId) return;
+    
+    try {
+      setIsGenerating(true);
+      toast({
+        title: "Generating Description",
+        description: "Creating one sentence description for this photo as if you were a building engineer"
+      });
+      
+      // Get photo data for AI processing
+      const photoData = await imageProcessingService.getProcessedImage(image.originalPhotoId);
+      
+      // Generate the description using AI
+      const generatedDescription = await editorEnhancementService.generateTextWithImage(
+        "", // No existing text
+        "Write a short, concise property inspection description", // Default prompt
+        photoData
+      );
+      
+      // Update the image with the new description
+      setCustomPages(prevPages => 
+        prevPages.map(p => 
+          p.id === pageId 
+            ? {
+                ...p,
+                images: p.images.map(img => 
+                  img.id === imageId
+                    ? { ...img, description: generatedDescription }
+                    : img
+                )
+              } 
+            : p
+        )
+      );
+      
+      toast({
+        title: "Description Generated",
+        description: "AI-generated description has been added to the photo."
+      });
+      
+    } catch (error) {
+      console.error("Photo description generation error:", error);
+      toast({
+        title: "Generation Failed",
+        description: "Could not generate a description for this photo.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+  
+  // Update photo description manually
+  const updatePhotoDescription = (pageId: string, imageId: string, description: string) => {
+    setCustomPages(prevPages => 
+      prevPages.map(page => 
+        page.id === pageId 
+          ? {
+              ...page,
+              images: page.images.map(img => 
+                img.id === imageId
+                  ? { ...img, description }
+                  : img
+              )
+            } 
+          : page
+      )
+    );
+  };
+  
   // Update page content
   const handleUpdatePageContent = (pageId: string, content: string) => {
     setCustomPages(prevPages => 
@@ -493,29 +672,72 @@ export default function UnifiedReportEditor() {
 
       {/* Right panel - Document Editor */}
       <div className="w-2/3 flex flex-col bg-white overflow-hidden">
-        {/* Toolbar */}
+        {/* Main Toolbar */}
         <div className="bg-gray-50 border-b border-gray-200">
           <div className="p-2 flex items-center justify-between">
             <div className="text-sm">
               Page {currentPage} of {totalPages}
             </div>
             <div className="flex items-center space-x-2">
-              {/* Proper React-based dropdown with state management */}
+              <Button 
+                size="sm"
+                variant={isInsertingPhoto ? "default" : "outline"}
+                onClick={startPhotoInsertion}
+                disabled={selectedPhotos.length === 0}
+              >
+                <ImageIcon className="h-4 w-4 mr-1" />
+                Insert Photo
+              </Button>
+              <Button 
+                size="sm"
+                onClick={() => {
+                  setEditingHeader(true);
+                  // Clear active editor when editing header
+                  setActiveEditor(null);
+                  setActivePage(null);
+                  setActiveHeadingContext("");
+                }}
+              >
+                <Pencil className="h-4 w-4 mr-1" />
+                Edit Header
+              </Button>
+              <Button 
+                size="sm"
+                onClick={handleExportPDF}
+              >
+                <FileDown className="h-4 w-4 mr-1" />
+                Export PDF
+              </Button>
+            </div>
+          </div>
+        </div>
+        
+        {/* Format Toolbar with Add Page Button */}
+        <div className="relative" style={{ zIndex: dropdownOpen ? 50 : 1 }}>
+          <div 
+            className={`format-toolbar-container flex ${activeEditor && activePage ? 'active' : 'inactive'}`}
+            onClick={(e) => {
+              // Prevent the click on toolbar from causing page blur
+              e.stopPropagation();
+            }}
+          >
+            {/* Add Page Button on the left side of formatting toolbar */}
+            <div className="flex items-center pl-2 border-r border-gray-200 pr-2 add-page-container">
               <div className="relative" ref={dropdownRef}>
                 <div className="flex">
                   <Button 
                     size="sm" 
-                    variant="outline"
+                    variant="secondary"
                     onClick={() => addNewPage('standard')}
-                    className="rounded-r-none border-r-0"
+                    className="rounded-r-none border-r-0 bg-blue-50 hover:bg-blue-100 text-blue-600"
                   >
                     <Plus className="h-4 w-4 mr-1" />
                     Add Page
                   </Button>
                   <Button
                     size="sm"
-                    variant="outline"
-                    className="rounded-l-none px-1"
+                    variant="secondary"
+                    className="rounded-l-none px-1 bg-blue-50 hover:bg-blue-100 text-blue-600"
                     onClick={(e) => {
                       e.stopPropagation();
                       setDropdownOpen(!dropdownOpen);
@@ -527,7 +749,7 @@ export default function UnifiedReportEditor() {
                 
                 {dropdownOpen && (
                   <div 
-                    className="absolute top-full right-0 mt-1 bg-white shadow-lg rounded-md border border-gray-200 py-1 z-10"
+                    className="absolute top-full left-0 mt-1 bg-white shadow-lg rounded-md border border-gray-200 py-1 z-50"
                     onClick={(e) => e.stopPropagation()}
                   >
                     <button
@@ -553,30 +775,17 @@ export default function UnifiedReportEditor() {
                   </div>
                 )}
               </div>
-              
-              <Button 
-                size="sm"
-                variant={isInsertingPhoto ? "default" : "outline"}
-                onClick={startPhotoInsertion}
-                disabled={selectedPhotos.length === 0}
-              >
-                <ImageIcon className="h-4 w-4 mr-1" />
-                Insert Photo
-              </Button>
-              <Button 
-                size="sm"
-                onClick={() => setEditingHeader(true)}
-              >
-                <Pencil className="h-4 w-4 mr-1" />
-                Edit Header
-              </Button>
-              <Button 
-                size="sm"
-                onClick={handleExportPDF}
-              >
-                <FileDown className="h-4 w-4 mr-1" />
-                Export PDF
-              </Button>
+            </div>
+            
+            {/* Format toolbar options */}
+            <div className="flex-grow">
+              {activeEditor && activePage ? (
+                <FormatToolbar editor={activeEditor} />
+              ) : (
+                <div className="format-toolbar text-gray-400 text-xs py-2 text-center">
+                  Select text to use formatting options
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -643,6 +852,9 @@ export default function UnifiedReportEditor() {
                     header={headerData}
                     logo={logo}
                     onRemoveImage={(imageId) => removePhotoFromPage(page.id, imageId)}
+                    onGenerateImageDescription={(imageId) => generatePhotoDescription(page.id, imageId)}
+                    onUpdateImageDescription={(imageId, description) => updatePhotoDescription(page.id, imageId, description)}
+                    isGenerating={isGenerating}
                   >
                     <div className="relative">
                       {selectedPhotos.length > 0 && (
@@ -661,11 +873,51 @@ export default function UnifiedReportEditor() {
                         selectedPhotoId={selectedPhotos.length > 0 ? selectedPhotos[0] : undefined}
                         onGenerateText={handleGenerateText}
                         onHeadingChange={(heading) => {
-                          // Only update if we have an actual heading
-                          if (heading && heading.trim() !== '') {
-                            console.log(`Setting active heading context: "${heading}"`);
+                          // Only update if we have an actual heading and this page is the active one
+                          if (heading && heading.trim() !== '' && page.id === activePage) {
+                            console.log(`Setting active heading context: "${heading}" from page ${page.id}`);
                             setActiveHeadingContext(heading);
+                          } else if (page.id !== activePage && heading && heading.trim() !== '') {
+                            console.log(`Ignoring heading change "${heading}" from inactive page ${page.id}`);
                           }
+                        }}
+                        onEditorReady={(editor) => {
+                          // Store the editor reference in our map
+                          editorsMap.current.set(page.id, editor);
+                          
+                          // Add focus event listener to update active editor and page
+                          const handleFocus = () => {
+                            setActiveEditor(editor);
+                            setActivePage(page.id);
+                            
+                            // Update heading context based on the current content in the active editor
+                            const currentHeadingContext = editor.getAttributes('heading').level 
+                              ? editor.state.doc.textContent.split('\n')[0]?.trim() || ''
+                              : '';
+                              
+                            if (currentHeadingContext) {
+                              setActiveHeadingContext(currentHeadingContext);
+                              console.log(`Setting active heading context on focus: "${currentHeadingContext}"`);
+                            }
+                            
+                            console.log(`Editor for page ${page.id} is now active`);
+                          };
+                          
+                          // Add focus handler to the editor element
+                          const editorElement = editor.options.element;
+                          editorElement.addEventListener('focus', handleFocus, true);
+                          
+                          // Initialize active editor for the first page
+                          if (pageIndex === 0 && !activeEditor) {
+                            setActiveEditor(editor);
+                            setActivePage(page.id);
+                          }
+                          
+                          // Handle cleanup
+                          return () => {
+                            editorElement.removeEventListener('focus', handleFocus, true);
+                            editorsMap.current.delete(page.id);
+                          };
                         }}
                       />
                     </div>
