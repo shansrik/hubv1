@@ -21,6 +21,7 @@
     "clsx": "^2.1.1",
     "draft-js": "^0.11.7",
     "html2canvas": "^1.4.1",
+    "html2pdf.js": "^0.10.3",
     "jspdf": "^2.5.1",
     "lucide-react": "^0.477.0",
     "next": "14.2.16",
@@ -28,7 +29,13 @@
     "react-dom": "^18",
     "react-pdf": "^7.7.3",
     "tailwind-merge": "^3.0.2",
-    "tailwindcss-animate": "^1.0.7"
+    "tailwindcss-animate": "^1.0.7",
+    "@tiptap/extension-bubble-menu": "^2.11.5",
+    "@tiptap/extension-floating-menu": "^2.11.5",
+    "@tiptap/extension-highlight": "^2.11.5",
+    "@tiptap/react": "^2.11.5",
+    "@tiptap/starter-kit": "^2.11.5",
+    "framer-motion": "^12.4.10"
   },
   "devDependencies": {
     "@types/node": "^20",
