@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useEffect, useRef } from 'react'
 import { useEditor, EditorContent, Extension } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Highlight from '@tiptap/extension-highlight'
@@ -10,7 +10,6 @@ import { useEditorKeyboard } from './hooks/use-editor-keyboard'
 import { useEditorHeadingContext } from './hooks/use-editor-heading-context'
 import { EditorBubbleMenu } from './menus/bubble-menu'
 import { FormatMenu } from './menus/format-menu'
-import { FormatToolbar } from './menus/format-toolbar'
 
 // Define a custom extension for temporary text highlighting
 const TemporaryHighlight = Extension.create({
