@@ -106,7 +106,6 @@ export const exportToPDF = async (element: HTMLElement, filename: string): Promi
           scale: 2,
           useCORS: true,
           logging: false,
-          letterRendering: true
         });
         
         // Add to PDF (add new page if not the first page)

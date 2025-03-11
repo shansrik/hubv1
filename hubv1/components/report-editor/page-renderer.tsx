@@ -127,11 +127,12 @@ export default function PageRenderer({
                     {/* Photo container with 4:3 aspect ratio */}
                     <div className="relative mb-2" style={{ width: '100%', paddingBottom: '75%' }}>
                       <div className="absolute inset-0">
-                        <img 
+                        <Image 
                           src={image.url} 
                           alt={`Photograph ${idx + 1}`} 
                           className="w-full h-full object-cover rounded-md"
-                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                          layout="fill"
+                          objectFit="cover"
                         />
                         <button
                           className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1"
@@ -184,7 +185,7 @@ export default function PageRenderer({
             <div className="mt-4 grid grid-cols-2 gap-4">
               {page.images.map(image => (
                 <div key={image.id} className="relative">
-                  <img 
+                  <Image 
                     src={image.url} 
                     alt="Report image" 
                     className="w-full h-auto rounded-md"
