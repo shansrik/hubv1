@@ -18,7 +18,8 @@ CONFLICTS=()
 for file in $(find hubv1 -type f -not -path "*/node_modules/*" -not -path "*/.git/*"); do
   # Get the relative path for checking conflicts
   rel_path=${file#hubv1/}
-  if [ -f "$rel_path" ] && [ "$rel_path" != "move-to-root.sh" ]; then
+  # Skip package.json since we've manually merged it
+  if [ -f "$rel_path" ] && [ "$rel_path" != "move-to-root.sh" ] && [ "$rel_path" != "package.json" ]; then
     CONFLICTS+=("$rel_path")
   fi
 done
