@@ -458,8 +458,7 @@ export default function UnifiedReportEditor() {
         title: "AI text generated",
         description: selectedPhotos.length > 0
           ? `AI-generated text based on ${selectedPhotos.length === 1 ? 'the selected photo' : 'selected photos'} has been created.` 
-          : "AI-generated text has been created.",
-        duration: 3000,
+          : "AI-generated text has been created."
       })
       
       return generatedText;

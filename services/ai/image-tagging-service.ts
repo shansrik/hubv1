@@ -57,7 +57,8 @@ Example response format: ["exterior view", "brick facade", "landscaping", "good 
       }
     } catch (parseError) {
       // If direct parsing fails, try to extract JSON from text
-      const jsonMatch = response.match(/\[.*\]/s);
+      // Using a regex that works with older JS versions (without the 's' flag)
+      const jsonMatch = response.match(/\[([\s\S]*?)\]/);
       if (jsonMatch) {
         try {
           const tags = JSON.parse(jsonMatch[0]) as string[];
@@ -74,7 +75,7 @@ Example response format: ["exterior view", "brick facade", "landscaping", "good 
             const match = line.match(/"([^"]+)"|'([^']+)'|([a-zA-Z\s-]+)/);
             return match ? (match[1] || match[2] || match[3]).trim() : null;
           })
-          .filter(tag => tag && tag.length > 0 && !tag.includes(':'));
+          .filter((tag): tag is string => !!tag && tag.length > 0 && !tag.includes(':'));
         
         if (tags.length > 0) {
           return { tags };

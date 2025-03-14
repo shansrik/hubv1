@@ -249,8 +249,7 @@ export const EditorBubbleMenu: React.FC<BubbleMenuProps> = ({
               // Show success message
               toast({
                 title: "AI Enhancement Applied",
-                description: hasSelectedPhoto ? "Enhancement with photo context applied" : "Text enhancement applied",
-                duration: 3000
+                description: hasSelectedPhoto ? "Enhancement with photo context applied" : "Text enhancement applied"
               })
             }
           } catch (error) {
@@ -355,8 +354,20 @@ export const EditorBubbleMenu: React.FC<BubbleMenuProps> = ({
                     .run()
                     
                   // Apply highlight effect to the inserted text
-                  const insertionEndPos = selectionFrom + enhancedText.length;
-                  editor.commands.highlightText(selectionFrom, insertionEndPos)
+                  // Apply a temporary highlight class to the paragraph directly
+                  try {
+                    const paragraphNode = editor.view.dom.querySelector('p');
+                    if (paragraphNode) {
+                      paragraphNode.classList.add('ai-highlight-effect');
+                      
+                      // Remove the highlight class after 2 seconds
+                      setTimeout(() => {
+                        paragraphNode.classList.remove('ai-highlight-effect');
+                      }, 2000);
+                    }
+                  } catch (highlightErr) {
+                    console.error('Could not apply highlight effect', highlightErr);
+                  }
                   
                   // Briefly select the text
                   setTimeout(() => {
@@ -366,8 +377,7 @@ export const EditorBubbleMenu: React.FC<BubbleMenuProps> = ({
                     });
                   }, 50);
                 } else {
-                  // Get paragraph position info before replacing
-                  const nodePos = editor.state.selection.$from.start();
+                  // Replace the current paragraph
                   
                   // Replace the current paragraph
                   editor
@@ -379,8 +389,21 @@ export const EditorBubbleMenu: React.FC<BubbleMenuProps> = ({
                     .run()
                     
                   // Apply highlight effect
-                  const paragraphEndPos = nodePos + enhancedText.length;
-                  editor.commands.highlightText(nodePos, paragraphEndPos)
+                  
+                  // Apply a temporary highlight class to the paragraph directly
+                  try {
+                    const paragraphNode = editor.view.dom.querySelector('p');
+                    if (paragraphNode) {
+                      paragraphNode.classList.add('ai-highlight-effect');
+                      
+                      // Remove the highlight class after 2 seconds
+                      setTimeout(() => {
+                        paragraphNode.classList.remove('ai-highlight-effect');
+                      }, 2000);
+                    }
+                  } catch (highlightErr) {
+                    console.error('Could not apply highlight effect', highlightErr);
+                  }
                   
                   // Select the paragraph briefly
                   setTimeout(() => {
@@ -391,8 +414,7 @@ export const EditorBubbleMenu: React.FC<BubbleMenuProps> = ({
                 // Show success message
                 toast({
                   title: "AI Enhancement Applied",
-                  description: hasSelectedPhoto ? "Enhancement with photo context applied" : "Custom enhancement applied",
-                  duration: 3000
+                  description: hasSelectedPhoto ? "Enhancement with photo context applied" : "Custom enhancement applied"
                 })
               }
             } catch (error) {
@@ -472,7 +494,7 @@ export const EditorBubbleMenu: React.FC<BubbleMenuProps> = ({
         const isInputActive = activeElement?.id?.includes('prompt-input');
         
         // Show bubble menu when text is selected or when we're in the AI input
-        return from !== to || isInputActive;
+        return (from !== to || isInputActive) ? true : false;
       }}
     >
       <div className="bg-white rounded-md shadow-lg border border-gray-200 p-1 flex items-center gap-1">
@@ -701,8 +723,20 @@ export const EditorBubbleMenu: React.FC<BubbleMenuProps> = ({
                           const insertionPos = selectionFrom;
                           const insertionEndPos = insertionPos + enhancedText.length;
                           
-                          // Apply the temporary highlight effect
-                          editor.commands.highlightText(insertionPos, insertionEndPos);
+                          // Apply a temporary highlight class to the paragraph directly
+                          try {
+                            const paragraphNode = editor.view.dom.querySelector('p');
+                            if (paragraphNode) {
+                              paragraphNode.classList.add('ai-highlight-effect');
+                              
+                              // Remove the highlight class after 2 seconds
+                              setTimeout(() => {
+                                paragraphNode.classList.remove('ai-highlight-effect');
+                              }, 2000);
+                            }
+                          } catch (highlightErr) {
+                            console.error('Could not apply highlight effect', highlightErr);
+                          }
                           
                           // Select the inserted text briefly for user feedback
                           setTimeout(() => {
@@ -717,8 +751,7 @@ export const EditorBubbleMenu: React.FC<BubbleMenuProps> = ({
                             }, 600);
                           }, 100);
                         } else {
-                          // Get the node position info before replacing
-                          const nodePos = editor.state.selection.$from.start();
+                          // Replace the entire paragraph
                           
                           // Replace the entire paragraph without the span wrapper
                           editor.chain()
@@ -729,8 +762,21 @@ export const EditorBubbleMenu: React.FC<BubbleMenuProps> = ({
                             .run()
                             
                           // Apply the temporary highlight to the new paragraph content
-                          const paragraphEndPos = nodePos + enhancedText.length;
-                          editor.commands.highlightText(nodePos, paragraphEndPos)
+                          
+                          // Apply a temporary highlight class to the paragraph directly
+                          try {
+                            const paragraphNode = editor.view.dom.querySelector('p');
+                            if (paragraphNode) {
+                              paragraphNode.classList.add('ai-highlight-effect');
+                              
+                              // Remove the highlight class after 2 seconds
+                              setTimeout(() => {
+                                paragraphNode.classList.remove('ai-highlight-effect');
+                              }, 2000);
+                            }
+                          } catch (highlightErr) {
+                            console.error('Could not apply highlight effect', highlightErr);
+                          }
                             
                           // Select the paragraph briefly to highlight it
                           setTimeout(() => {
@@ -747,8 +793,7 @@ export const EditorBubbleMenu: React.FC<BubbleMenuProps> = ({
                         // Show success toast
                         toast({
                           title: "AI Enhancement Applied",
-                          description: "Text enhanced using your custom prompt",
-                          duration: 3000
+                          description: "Text enhanced using your custom prompt"
                         })
                       }
                     }).catch(() => {

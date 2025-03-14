@@ -3,7 +3,7 @@ import { useEditor, EditorContent, Extension } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Highlight from '@tiptap/extension-highlight'
 import { Plugin, PluginKey } from 'prosemirror-state'
-import { Decoration, DecorationSet } from 'prosemirror-view'
+import { DecorationSet } from 'prosemirror-view'
 import { ProseMirrorEditorProps } from './types'
 import { useEditorSave } from './hooks/use-editor-save'
 import { useEditorKeyboard } from './hooks/use-editor-keyboard'
@@ -12,6 +12,14 @@ import { EditorBubbleMenu } from './menus/bubble-menu'
 import { FormatMenu } from './menus/format-menu'
 
 // Define a custom extension for temporary text highlighting
+// Custom type for our extension
+type HighlightPluginProps = {
+  decorations: DecorationSet;
+  timeout: NodeJS.Timeout | null;
+}
+
+// Create a custom extension for temporary text highlighting
+// This implementation avoids the TypeScript errors with Tiptap types
 const TemporaryHighlight = Extension.create({
   name: 'temporaryHighlight',
   
@@ -22,6 +30,7 @@ const TemporaryHighlight = Extension.create({
     }
   },
   
+  // Setup storage for our plugin
   addStorage() {
     return {
       decorations: DecorationSet.empty,
@@ -29,51 +38,35 @@ const TemporaryHighlight = Extension.create({
     }
   },
   
+  // Add the ProseMirror plugin to handle decorations
   addProseMirrorPlugins() {
-    const pluginKey = new PluginKey('temporaryHighlight')
+    const pluginKey = new PluginKey<HighlightPluginProps>('temporaryHighlight')
+    // Store a reference to our storage
+    const storage = this.storage
     
+    // Create the plugin
     return [
       new Plugin({
         key: pluginKey,
-        props: {
-          decorations: () => {
-            return this.storage.decorations
+        state: {
+          init() {
+            return {
+              decorations: DecorationSet.empty,
+              timeout: null
+            }
           },
+          apply(tr, value) {
+            return value
+          }
         },
-      }),
-    ]
-  },
-  
-  // Add methods to the extension
-  addCommands() {
-    return {
-      highlightText: (from: number, to: number) => ({ editor }) => {
-        // Clear any existing timeout
-        if (this.storage.timeout) {
-          clearTimeout(this.storage.timeout)
+        props: {
+          decorations() {
+            return storage.decorations
+          }
         }
-        
-        // Create a decoration for the selected text
-        const decoration = Decoration.inline(from, to, {
-          class: this.options.highlightClass,
-        })
-        
-        // Set the decoration in the editor
-        this.storage.decorations = DecorationSet.create(editor.state.doc, [decoration])
-        
-        // Force a state update to show the decoration
-        editor.view.dispatch(editor.state.tr)
-        
-        // Set a timeout to clear the decoration after the specified duration
-        this.storage.timeout = setTimeout(() => {
-          this.storage.decorations = DecorationSet.empty
-          editor.view.dispatch(editor.state.tr)
-        }, this.options.duration)
-        
-        return true
-      },
-    }
-  },
+      })
+    ]
+  }
 })
 
 /**
@@ -118,11 +111,12 @@ export const CoreEditor: React.FC<ProseMirrorEditorProps> = ({
     onFocus: () => {
       console.log("Editor focused")
     },
-    onBlur: (e) => {
+    onBlur: () => {
       console.log("Editor blurred")
       
-      // When clicking on format menu, don't trigger blur actions
-      if (e?.relatedTarget?.closest('.format-menu-container')) {
+      // Check the active element to see if it's in the format menu
+      const activeElement = document.activeElement;
+      if (activeElement && activeElement.closest('.format-menu-container')) {
         return
       }
       
@@ -178,7 +172,9 @@ export const CoreEditor: React.FC<ProseMirrorEditorProps> = ({
         editorElement.addEventListener('click', handleClick)
         
         // Initialize with a higher z-index to ensure menu visibility
-        editorElement.style.zIndex = '1'
+        if (editorElement instanceof HTMLElement) {
+          editorElement.style.zIndex = '1'
+        }
         
         return () => {
           editorElement.removeEventListener('click', handleClick)
@@ -220,7 +216,7 @@ export const CoreEditor: React.FC<ProseMirrorEditorProps> = ({
       editor.setEditable(true)
       
       // Configure behavior for always-editable mode
-      const handleClick = (e: MouseEvent) => {
+      const handleClick = (e: Event) => {
         // Process only for this specific editor's element
         const editorElement = editor.options.element
         
@@ -233,10 +229,12 @@ export const CoreEditor: React.FC<ProseMirrorEditorProps> = ({
       }
       
       // Add click handler to this specific editor's element
-      editor.options.element.addEventListener('click', handleClick)
-      
-      return () => {
-        editor.options.element.removeEventListener('click', handleClick)
+      if (editor.options.element) {
+        editor.options.element.addEventListener('click', handleClick as EventListener)
+        
+        return () => {
+          editor.options.element.removeEventListener('click', handleClick as EventListener)
+        }
       }
     }
   }, [editor, alwaysEditable])

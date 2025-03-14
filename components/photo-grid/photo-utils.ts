@@ -155,7 +155,7 @@ export const filterPhotos = (
       (photo) => 
         photo.id.toLowerCase().includes(lowercaseQuery) ||
         photo.name.toLowerCase().includes(lowercaseQuery) ||
-        photo.description.toLowerCase().includes(lowercaseQuery) ||
+        (photo.description ? photo.description.toLowerCase().includes(lowercaseQuery) : false) ||
         (photo.tags && photo.tags.some(tag => tag.toLowerCase().includes(lowercaseQuery)))
     );
   }
