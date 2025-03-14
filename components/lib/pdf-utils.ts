@@ -2,7 +2,28 @@
  * PDF Utilities for document processing
  */
 
-import { ReportData, Photo } from '../report-editor/types';
+import { ReportHeader } from '../report-editor/types';
+import { Photo } from '../photo-grid/photo-types';
+
+// Define the ReportData interface based on how it's used in the functions
+interface ReportData {
+  header?: ReportHeader;
+  document?: {
+    blocks: Array<{
+      type?: string;
+      text?: string;
+      items?: string[];
+      [key: string]: unknown;
+    }>;
+  };
+  photos?: Array<{
+    src: string;
+    thumbnail?: string;
+    width?: number;
+    height?: number;
+    [key: string]: unknown;
+  }>;
+}
 
 /**
  * Converts a report data structure to a format suitable for PDF generation
