@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
+import { Toaster } from "@/components/ui/toaster";
+import { ToastProvider } from "@/components/toast-provider";
 import "@/styles/globals.css";
 import "@/styles/document-editor.css";
 
@@ -29,7 +31,10 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        {children}
+        <ToastProvider>
+          {children}
+          <Toaster />
+        </ToastProvider>
       </body>
     </html>
   );
