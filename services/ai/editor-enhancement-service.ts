@@ -85,7 +85,7 @@ export const editorEnhancementService = {
 
                         # Instructions
 
-                        1. **If asked to describe a component**: Determine and specify the type of component shown in the image. If mechanical, try to name the brand, and how it's powered. 
+                        1. **If asked to describe a component**: Determine and specify the type of component shown in the image. If mechanical, try to name the brand (Laars if hot water boiler), and how it's powered. 
                         2. **If asked to assess Condition**: Evaluate the component's condition based on visual inspection. **Describe Condition**: Provide a detailed description of the component's current physical state and any visible defects or issues.
 
                         # Output Format
