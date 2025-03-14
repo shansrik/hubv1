@@ -9,7 +9,7 @@ export interface OpenAIRequestBody {
     role: 'user' | 'assistant' | 'system';
     content: string | Array<{
       type: string;
-      [key: string]: any;
+      [key: string]: unknown;
     }>;
   }[];
   max_tokens?: number;
