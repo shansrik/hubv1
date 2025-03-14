@@ -7,8 +7,6 @@ import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/ui/use-toast'
 import { Photo, PhotoGridProps } from './photo-types'
 import { 
-  DEFAULT_PHOTOS, 
-  STORAGE_KEY, 
   loadPhotosFromStorage, 
   savePhotosToStorage, 
   filterPhotos, 

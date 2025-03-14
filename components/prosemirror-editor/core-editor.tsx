@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useEffect } from 'react'
 import { useEditor, EditorContent, Extension } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Highlight from '@tiptap/extension-highlight'
@@ -10,7 +10,6 @@ import { useEditorKeyboard } from './hooks/use-editor-keyboard'
 import { useEditorHeadingContext } from './hooks/use-editor-heading-context'
 import { EditorBubbleMenu } from './menus/bubble-menu'
 import { FormatMenu } from './menus/format-menu'
-import { FormatToolbar } from './menus/format-toolbar'
 
 // Define a custom extension for temporary text highlighting
 const TemporaryHighlight = Extension.create({
@@ -37,7 +36,7 @@ const TemporaryHighlight = Extension.create({
       new Plugin({
         key: pluginKey,
         props: {
-          decorations: state => {
+          decorations: () => {
             return this.storage.decorations
           },
         },
@@ -93,9 +92,6 @@ export const CoreEditor: React.FC<ProseMirrorEditorProps> = ({
 }) => {
   // State management
   
-  // References
-  const menuButtonRef = useRef<HTMLDivElement>(null)
-  
   // Initialize Tiptap editor with basic extensions and headings
   const editor = useEditor({
     extensions: [
@@ -114,7 +110,7 @@ export const CoreEditor: React.FC<ProseMirrorEditorProps> = ({
         class: 'prose max-w-none focus:outline-none min-h-[50px] px-2 py-4 cursor-text mt-1',
         id: `editor-${Date.now()}`, // Add unique ID for menu targeting
       },
-      handleClick(view, pos, event) {
+      handleClick() {
         // Important for click handling - helps prevent unwanted behaviors
         return false
       }

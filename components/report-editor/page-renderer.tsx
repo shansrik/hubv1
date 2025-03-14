@@ -2,8 +2,8 @@
 
 import { useRef, ReactNode } from "react";
 import Image from "next/image";
-import { X, Camera } from "lucide-react";
-import { PAGE_DIMENSIONS, ReportHeader, ReportPage, CompanyLogo, ReportImage } from "./types";
+import { X } from "lucide-react";
+import { PAGE_DIMENSIONS, ReportHeader, ReportPage, CompanyLogo } from "./types";
 
 interface PageRendererProps {
   page: ReportPage;

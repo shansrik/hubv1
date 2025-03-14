@@ -224,51 +224,6 @@ export default function UnifiedReportEditor() {
     });
   }
   
-  const deletePage = (pageId: string) => {
-    if (customPages.length <= 1) {
-      toast({
-        title: "Cannot Delete",
-        description: "You must have at least one page in your report.",
-        variant: "destructive"
-      });
-      return;
-    }
-    
-    // If this is the active page, clear the active editor state
-    if (pageId === activePage) {
-      setActiveEditor(null);
-      setActivePage(null);
-      setActiveHeadingContext("");
-    }
-    
-    // Remove this page from our editors map
-    editorsMap.current.delete(pageId);
-    
-    // Remove the page from the pages array
-    setCustomPages(customPages.filter(page => page.id !== pageId));
-    
-    // If we have remaining pages, select the first page as active
-    setTimeout(() => {
-      if (customPages.length > 1) {
-        const remainingPages = customPages.filter(page => page.id !== pageId);
-        if (remainingPages.length > 0) {
-          const firstPageId = remainingPages[0].id;
-          const firstEditor = editorsMap.current.get(firstPageId);
-          
-          if (firstEditor) {
-            setActiveEditor(firstEditor);
-            setActivePage(firstPageId);
-          }
-        }
-      }
-    }, 50);
-    
-    toast({
-      title: "Page Deleted",
-      description: "The page has been removed from your report."
-    });
-  }
-  
   // Image operations
   const startPhotoInsertion = () => {
     if (selectedPhotos.length === 0) {

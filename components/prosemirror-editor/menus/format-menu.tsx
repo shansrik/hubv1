@@ -1,12 +1,5 @@
-import React, { useRef } from 'react'
-import { 
-  Plus,
-  Heading1,
-  Heading2,
-  Heading3,
-  List,
-  ListOrdered,
-} from 'lucide-react'
+import React from 'react'
+import { Plus } from 'lucide-react'
 import { Button } from "@/components/ui/button"
 import { FormatMenuProps } from '../types'
 
@@ -15,7 +8,6 @@ import { FormatMenuProps } from '../types'
  * This menu provides formatting options like paragraph, heading, lists
  */
 export const FormatMenu: React.FC<FormatMenuProps> = ({ editor }) => {
-  const menuButtonRef = useRef<HTMLDivElement>(null)
 
   /**
    * Handle format menu button click

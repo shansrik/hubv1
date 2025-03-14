@@ -201,9 +201,8 @@ export const EditorBubbleMenu: React.FC<BubbleMenuProps> = ({
             // Replace the text with enhanced version and highlight it
             if (enhancedText && enhancedText !== text) {
               if (isSelection) {
-                // Store the current selection positions for highlighting
+                // Store the current selection position for highlighting
                 const selectionFrom = from;
-                const selectionTo = to;
                 
                 editor
                   .chain()
@@ -752,7 +751,7 @@ export const EditorBubbleMenu: React.FC<BubbleMenuProps> = ({
                           duration: 3000
                         })
                       }
-                    }).catch(error => {
+                    }).catch(() => {
                       toast({
                         title: "Enhancement failed",
                         description: "Failed to enhance text. Please try again.",

@@ -2,7 +2,7 @@
  * PDF Utilities for document processing
  */
 
-import { ReportData } from '../report-editor/types';
+import { ReportData, Photo } from '../report-editor/types';
 
 /**
  * Converts a report data structure to a format suitable for PDF generation
@@ -42,11 +42,11 @@ export const prepareReportForPdf = (reportData: ReportData) => {
 /**
  * Generates an image grid for PDF output
  */
-export const generateImageGrid = (photos: any[], maxColumns = 2) => {
+export const generateImageGrid = (photos: Photo[], maxColumns = 2) => {
   if (!photos || photos.length === 0) return [];
   
-  const rows = [];
-  let currentRow = [];
+  const rows: Photo[][] = [];
+  let currentRow: Photo[] = [];
   
   photos.forEach((photo, index) => {
     currentRow.push(photo);
@@ -65,7 +65,7 @@ export const generateImageGrid = (photos: any[], maxColumns = 2) => {
  * Optimizes images for PDF inclusion
  * Reduces size to prevent large PDFs
  */
-export const optimizeImagesForPdf = async (photos: any[]) => {
+export const optimizeImagesForPdf = async (photos: Photo[]) => {
   if (!photos || photos.length === 0) return [];
   
   return Promise.all(photos.map(async (photo) => {
@@ -81,11 +81,11 @@ export const optimizeImagesForPdf = async (photos: any[]) => {
 /**
  * Extracts text content from document data for indexing
  */
-export const extractTextContent = (document: any) => {
+export const extractTextContent = (document: { blocks?: Array<{ type: string; text?: string; items?: string[] }> }) => {
   if (!document || !document.blocks) return '';
   
   return document.blocks
-    .map((block: any) => {
+    .map((block) => {
       if (block.type === 'paragraph') {
         return block.text || '';
       } else if (block.type === 'heading') {
@@ -99,9 +99,11 @@ export const extractTextContent = (document: any) => {
     .join('\n');
 };
 
-export default {
+const pdfUtils = {
   prepareReportForPdf,
   generateImageGrid,
   optimizeImagesForPdf,
   extractTextContent
 };
+
+export default pdfUtils;

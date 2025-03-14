@@ -1,7 +1,5 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { Editor } from '@tiptap/react'
 import { CoreEditor } from './core-editor'
 import { ProseMirrorEditorProps } from './types'
 

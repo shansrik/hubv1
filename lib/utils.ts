@@ -34,12 +34,10 @@ export async function exportToPDF(contentElement: HTMLElement, filename: string 
     // If content is longer than one page, split it into multiple pages
     let heightLeft = imgHeight;
     let position = 0;
-    let pageCount = 0;
     
     // Add first page
     pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
     heightLeft -= pageHeight;
-    pageCount++;
     
     // Add additional pages if needed
     while (heightLeft > 0) {
@@ -47,7 +45,6 @@ export async function exportToPDF(contentElement: HTMLElement, filename: string 
       pdf.addPage();
       pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
       heightLeft -= pageHeight;
-      pageCount++;
     }
     
   } catch (err) {
