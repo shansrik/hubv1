@@ -20,6 +20,7 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData();
     const html = formData.get('html') as string;
     const filename = formData.get('filename') as string || 'document.pdf';
+    const isMultiPage = formData.get('isMultiPage') === 'true';
     
     if (!html) {
       return new NextResponse(
@@ -30,7 +31,20 @@ export async function POST(request: NextRequest) {
     
     // Forward the HTML to a PDF conversion service
     // Using a simple implementation here that relies on a server-side PDF service
-    // This could be replaced with any PDF service API call
+    
+    // Configure options based on whether this is a multi-page document
+    const pdfOptions = {
+      source: html,
+      landscape: false,
+      format: 'Letter',
+      margin: isMultiPage ? '0' : '0.5in', // No margins for multi-page documents (they're handled in the HTML)
+      sandbox: false,
+      // These settings ensure that page breaks are honored properly
+      pdf_options: {
+        preferCSSPageSize: true,  // Use CSS page size and margins
+        printBackground: true,    // Print background colors and images
+      }
+    };
     
     // Here's an example of sending to a third-party PDF conversion API
     const response = await fetch('https://api.pdfshift.io/v3/convert/pdf', {
@@ -39,21 +53,19 @@ export async function POST(request: NextRequest) {
         'Content-Type': 'application/json',
         'Authorization': `Basic ${Buffer.from(process.env.PDFSHIFT_API_KEY || '').toString('base64')}`
       },
-      body: JSON.stringify({
-        source: html,
-        landscape: false,
-        format: 'Letter',
-        margin: '0.5in',
-        sandbox: false
-      })
+      body: JSON.stringify(pdfOptions)
     });
     
     if (!response.ok) {
       // If the service is not available, fallback to a minimal PDF generation
       console.warn('PDF service unavailable, using fallback PDF generation');
       
+      // Create a fallback PDF message
+      const errorMessage = isMultiPage 
+        ? 'PDF service unavailable. Your multi-page document could not be generated.' 
+        : 'PDF service unavailable. Please try again later.';
+      
       // Create a simple PDF with minimal formatting
-      // This is a very basic fallback that would be replaced with a more robust solution
       const fallbackPdf = Buffer.from(`
         %PDF-1.4
         1 0 obj
@@ -82,12 +94,12 @@ export async function POST(request: NextRequest) {
         >>
         endobj
         5 0 obj
-        << /Length 68 >>
+        << /Length ${errorMessage.length * 2} >>
         stream
         BT
         /F1 12 Tf
         50 700 Td
-        (PDF service unavailable. Please try again later.) Tj
+        (${errorMessage}) Tj
         ET
         endstream
         endobj

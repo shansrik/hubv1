@@ -1,11 +1,27 @@
 /**
  * PDF utility functions for exporting content
  */
-import html2canvas from 'html2canvas';
-import { jsPDF } from 'jspdf';
+
+// Types for PDF utilities
+
+// Define interfaces for toast system
+interface ToastParams {
+  title: string;
+  description: string;
+  variant?: 'default' | 'destructive';
+}
+
+interface ToastAPI {
+  toast: (params: ToastParams) => { dismiss: () => void };
+}
+
+interface WindowWithToast extends Window {
+  __toast?: ToastAPI;
+}
 
 /**
- * Exports a DOM element to PDF using html2canvas and jsPDF
+ * Exports a DOM element to PDF using server-side PDF generation
+ * This preserves the original functionality but removes canvas dependency
  * @param element The DOM element to export
  * @param filename The filename for the PDF
  * @returns Promise that resolves when the PDF is exported
@@ -13,6 +29,9 @@ import { jsPDF } from 'jspdf';
 export const exportToPDF = async (element: HTMLElement, filename: string): Promise<boolean> => {
   try {
     if (typeof window !== 'undefined' && element) {
+      // Show loading indicator
+      const loadingToast = showToast('Generating PDF...', 'Please wait while your document is prepared.');
+      
       // First, make a clone of the element to avoid modifying the original
       const clonedElement = element.cloneNode(true) as HTMLElement;
       
@@ -29,7 +48,7 @@ export const exportToPDF = async (element: HTMLElement, filename: string): Promi
         }
       });
       
-      // Apply typography styles to content
+      // Apply typography styles to content exactly as in the original implementation
       const paragraphs = clonedElement.querySelectorAll('p');
       paragraphs.forEach(p => {
         (p as HTMLElement).style.fontSize = '11pt';
@@ -51,79 +70,92 @@ export const exportToPDF = async (element: HTMLElement, filename: string): Promi
         (h2 as HTMLElement).style.margin = '0.6em 0 0.3em';
       });
       
-      // Create a new document
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'in',
-        format: 'letter'
-      });
-      
-      // Get the page containers
+      // Get the page containers - maintain the original page handling logic
       const pageContainers = clonedElement.querySelectorAll('.page-container');
       
-      // Create a temporary div to hold our styled content for rendering
-      const tempDiv = document.createElement('div');
-      tempDiv.style.position = 'absolute';
-      tempDiv.style.left = '-9999px';
-      tempDiv.style.width = '8.5in';
-      tempDiv.style.height = '11in';
-      tempDiv.style.overflow = 'hidden';
+      // Create a formatted document with each page properly laid out
+      const formattedDocument = document.createElement('div');
+      formattedDocument.className = 'pdf-document';
+      formattedDocument.style.width = '8.5in';
+      formattedDocument.style.margin = '0 auto';
+      formattedDocument.style.backgroundColor = '#fff';
       
-      document.body.appendChild(tempDiv);
-      
-      // Process each page one at a time
+      // Process each page one at a time - maintaining the original page-by-page approach
       for (let i = 0; i < pageContainers.length; i++) {
         const pageContainer = pageContainers[i] as HTMLElement;
+        const pageClone = pageContainer.cloneNode(true) as HTMLElement;
         
-        // Move all transform styles to absolute positioning for rendering
-        pageContainer.style.transform = 'none';
-        pageContainer.style.position = 'relative';
-        pageContainer.style.top = '0';
-        pageContainer.style.left = '0';
-        pageContainer.style.width = '8.5in';
-        pageContainer.style.height = '11in';
+        // Style the page exactly as in the original implementation
+        pageClone.style.transform = 'none';
+        pageClone.style.position = 'relative';
+        pageClone.style.top = '0';
+        pageClone.style.left = '0';
+        pageClone.style.width = '8.5in';
+        pageClone.style.height = '11in';
+        pageClone.style.pageBreakAfter = 'always';
+        pageClone.style.margin = '0';
+        pageClone.style.padding = '0';
+        pageClone.style.boxSizing = 'border-box';
+        pageClone.style.overflow = 'hidden';
         
-        // Adjust header to be more compact
-        const header = pageContainer.querySelector('.pdf-header');
+        // Apply the same adjustments to headers and content areas as the original
+        const header = pageClone.querySelector('.pdf-header');
         if (header) {
           (header as HTMLElement).style.top = '0.3in';
         }
         
-        // Adjust content area to be larger
-        const contentArea = pageContainer.querySelector('.content-container');
+        const contentArea = pageClone.querySelector('.content-container');
         if (contentArea) {
           (contentArea as HTMLElement).style.top = '0.8in';
           (contentArea as HTMLElement).style.bottom = '0.6in';
           (contentArea as HTMLElement).style.maxHeight = 'calc(11in - 1.4in)';
         }
         
-        // Add current page to temp div for rendering
-        tempDiv.innerHTML = '';
-        tempDiv.appendChild(pageContainer.cloneNode(true));
-        
-        // Convert to canvas
-        const canvas = await html2canvas(tempDiv, {
-          scale: 2,
-          useCORS: true,
-          logging: false,
-          letterRendering: true
-        });
-        
-        // Add to PDF (add new page if not the first page)
-        if (i > 0) {
-          pdf.addPage();
-        }
-        
-        // Convert canvas to image and add to PDF
-        const imgData = canvas.toDataURL('image/jpeg', 1.0);
-        pdf.addImage(imgData, 'JPEG', 0, 0, 8.5, 11, '', 'FAST');
+        // Add the page to our formatted document
+        formattedDocument.appendChild(pageClone);
       }
       
-      // Remove the temporary div
-      document.body.removeChild(tempDiv);
+      // Serialize the HTML content with all the page-specific formatting preserved
+      const serializedHTML = createPrintableHTML(formattedDocument);
       
-      // Save the PDF
-      pdf.save(filename);
+      // Create form data for the API request
+      const formData = new FormData();
+      formData.append('html', serializedHTML);
+      formData.append('filename', filename);
+      formData.append('isMultiPage', 'true'); // Signal that this is multi-page content
+      
+      // Send to server endpoint for PDF generation
+      const response = await fetch('/api/generate-pdf', {
+        method: 'POST',
+        body: formData
+      });
+      
+      // Hide loading indicator
+      if (loadingToast && loadingToast.dismiss) {
+        loadingToast.dismiss();
+      }
+      
+      if (!response.ok) {
+        throw new Error('PDF generation failed');
+      }
+      
+      // Get the PDF blob
+      const pdfBlob = await response.blob();
+      
+      // Create a download link and trigger download
+      const downloadUrl = URL.createObjectURL(pdfBlob);
+      const downloadLink = document.createElement('a');
+      downloadLink.href = downloadUrl;
+      downloadLink.download = filename;
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      document.body.removeChild(downloadLink);
+      
+      // Clean up object URL
+      URL.revokeObjectURL(downloadUrl);
+      
+      // Show success message
+      showToast('PDF Generated', 'Your document has been downloaded.');
       
       return true;
     }
@@ -132,6 +164,122 @@ export const exportToPDF = async (element: HTMLElement, filename: string): Promi
     return false;
   } catch (error) {
     console.error('Error exporting PDF:', error);
+    showToast('PDF Generation Failed', 'There was an error creating your PDF.', 'destructive');
     return false;
   }
 };
+
+// Helper function to show toast notifications
+function showToast(title: string, description: string, variant: 'default' | 'destructive' = 'default') {
+  // Simple implementation that works without dependencies
+  console.log(`${title}: ${description}`);
+  
+  // Try to use the application's toast system if available in global scope
+  try {
+    // Check for global toast API
+    const globalToast = (window as WindowWithToast).__toast;
+    if (typeof globalToast?.toast === 'function') {
+      return globalToast.toast({
+        title,
+        description,
+        variant
+      });
+    }
+  } catch (e) {
+    console.warn('Toast system not available', e);
+  }
+  
+  // Fallback implementation
+  return {
+    dismiss: () => console.log('Toast dismissed')
+  };
+}
+
+// Helper function to create printable HTML with all styles preserved
+function createPrintableHTML(element: HTMLElement): string {
+  // Create a container for the printable content
+  const container = document.createElement('div');
+  container.appendChild(element.cloneNode(true));
+  
+  // Extract all stylesheets to include
+  let styles = '';
+  
+  // Find and include all stylesheet links
+  const styleSheets = document.querySelectorAll('link[rel="stylesheet"]');
+  styleSheets.forEach(sheet => {
+    const href = (sheet as HTMLLinkElement).href;
+    if (href) {
+      styles += `<link rel="stylesheet" href="${href}">\n`;
+    }
+  });
+  
+  // Find and include all style elements
+  const styleElements = document.querySelectorAll('style');
+  styleElements.forEach(style => {
+    styles += style.outerHTML + '\n';
+  });
+  
+  // Create the final HTML document with print-specific CSS
+  const html = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <title>${document.title || 'Document'}</title>
+        ${styles}
+        <style>
+          @page {
+            size: letter portrait;
+            margin: 0;
+          }
+          body {
+            margin: 0;
+            padding: 0;
+            background-color: white;
+          }
+          .page-container {
+            width: 8.5in;
+            height: 11in;
+            page-break-after: always;
+            position: relative;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            box-sizing: border-box;
+            border: none;
+          }
+          /* Ensure headers are positioned correctly */
+          .pdf-header {
+            position: absolute;
+            top: 0.3in;
+            left: 0.5in;
+            right: 0.5in;
+          }
+          /* Ensure content areas are properly sized */
+          .content-container {
+            position: absolute;
+            top: 0.8in;
+            left: 0.5in;
+            right: 0.5in;
+            bottom: 0.6in;
+            overflow: hidden;
+          }
+          /* Reset any potentially problematic styles */
+          * {
+            text-shadow: none !important;
+            box-shadow: none !important;
+          }
+          /* Hide any unwanted elements */
+          .no-print, button, [role="button"] {
+            display: none !important;
+          }
+        </style>
+      </head>
+      <body>
+        ${container.innerHTML}
+      </body>
+    </html>
+  `;
+  
+  return html;
+}
