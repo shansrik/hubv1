@@ -5,6 +5,7 @@ const nextConfig = {
       'images.unsplash.com',
       'via.placeholder.com',
       'placehold.co',
+      'hebbkx1anhila5yf.public.blob.vercel-storage.com',
     ],
     remotePatterns: [
       {
@@ -14,6 +15,10 @@ const nextConfig = {
       {
         protocol: 'https',
         hostname: '**.unsplash.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'hebbkx1anhila5yf.public.blob.vercel-storage.com',
       },
     ],
   },
