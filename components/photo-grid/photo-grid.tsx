@@ -300,7 +300,7 @@ export default function PhotoGrid({ filterQuery, headingContext, selectedPhotos,
                     {photo.tags && photo.tags.length > 0 ? (
                       photo.tags.map((tag, idx) => (
                         <span key={idx} className="px-1.5 py-0.5 bg-gray-100 rounded-sm text-[9px] text-gray-700 whitespace-nowrap">
-                          {tag}
+                          {tag || ''}
                         </span>
                       ))
                     ) : (

@@ -17,8 +17,8 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "Notion-like Document Editor",
-  description: "A fluid, borderless document editor with autosave and AI assistance",
+  title: "Lunchtime Editor",
+  description: "Engineer AI assistance",
 };
 
 export default function RootLayout({
