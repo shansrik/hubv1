@@ -19,6 +19,7 @@ export default function PhotoGrid({ filterQuery, headingContext, selectedPhotos,
   const [filteredPhotos, setFilteredPhotos] = useState<Photo[]>([])
   const [isGeneratingDescriptions, setIsGeneratingDescriptions] = useState(false)
   const [zoom, setZoom] = useState(1)
+  const [isLoadingSection, setIsLoadingSection] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Load photos from localStorage on mount
@@ -40,6 +41,17 @@ export default function PhotoGrid({ filterQuery, headingContext, selectedPhotos,
       }
     }
   }, [photos, toast])
+
+  // Track heading context changes for loading animation
+  useEffect(() => {
+    if (headingContext) {
+      setIsLoadingSection(true);
+      // Short timeout to show loading animation even if filtering is fast
+      setTimeout(() => {
+        setIsLoadingSection(false);
+      }, 600);
+    }
+  }, [headingContext]);
 
   // Filter photos based on search query and heading context
   useEffect(() => {
@@ -202,6 +214,17 @@ export default function PhotoGrid({ filterQuery, headingContext, selectedPhotos,
   // Zoom controls
   const zoomIn = () => setZoom(prev => Math.min(prev + 0.25, 2))
   const zoomOut = () => setZoom(prev => Math.max(prev - 0.25, 0.5))
+  
+  // Loading animation component
+  const LoadingAnimation = () => (
+    <div className="flex flex-col items-center justify-center py-12 w-full h-40">
+      <div className="relative w-16 h-16">
+        <div className="absolute top-0 left-0 w-full h-full border-4 border-blue-200 rounded-full animate-pulse"></div>
+        <div className="absolute top-0 left-0 w-full h-full border-t-4 border-blue-500 rounded-full animate-spin"></div>
+      </div>
+      <p className="mt-4 text-sm text-blue-500 animate-pulse">Loading photos...</p>
+    </div>
+  )
 
   return (
     <div className="photo-grid-container flex flex-col h-full">
@@ -263,18 +286,21 @@ export default function PhotoGrid({ filterQuery, headingContext, selectedPhotos,
       
       {/* Photo grid */}
       <div className="flex-grow overflow-y-auto">
-        <div 
-          className="grid gap-3"
-          style={{ 
-            gridTemplateColumns: `repeat(auto-fill, minmax(${Math.max(120 * zoom, 80)}px, 1fr))`
-          }}
-        >
-          {filteredPhotos.length === 0 ? (
-            <div className="col-span-3 text-center py-8 text-gray-400">
-              {filterQuery ? 'No photos match your search' : 'No photos available'}
-            </div>
-          ) : (
-            filteredPhotos.map((photo) => (
+        {isLoadingSection ? (
+          <LoadingAnimation />
+        ) : (
+          <div 
+            className="grid gap-3"
+            style={{ 
+              gridTemplateColumns: `repeat(auto-fill, minmax(${Math.max(120 * zoom, 80)}px, 1fr))`
+            }}
+          >
+            {filteredPhotos.length === 0 ? (
+              <div className="col-span-3 text-center py-8 text-gray-400">
+                {filterQuery ? 'No photos match your search' : 'No photos available'}
+              </div>
+            ) : (
+              filteredPhotos.map((photo) => (
               <div
                 key={photo.id}
                 className={`relative rounded-md overflow-hidden cursor-pointer border ${
@@ -338,7 +364,8 @@ export default function PhotoGrid({ filterQuery, headingContext, selectedPhotos,
               </div>
             ))
           )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   )
